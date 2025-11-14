@@ -1,3 +1,4 @@
+// src/App.tsx
 import { Route, Switch } from "wouter";
 import Home from "./pages/Home";
 import TravelerRegister from "./pages/TravelerRegister";
@@ -17,31 +18,31 @@ function App() {
       <Route path="/register" component={TravelerRegister} />
       <Route path="/register-driver" component={DriverRegister} />
       <Route path="/login" component={Login} />
-      
+
       <Route path="/book-trip">
         <ProtectedRoute requiredUserType="traveler">
           <BookingForm />
         </ProtectedRoute>
       </Route>
-      
+
       <Route path="/traveler-dashboard">
         <ProtectedRoute requiredUserType="traveler">
           <TravelerDashboard />
         </ProtectedRoute>
       </Route>
-      
+
       <Route path="/driver-dashboard">
         <ProtectedRoute requiredUserType="driver">
           <DriverDashboard />
         </ProtectedRoute>
       </Route>
-      
+
       <Route path="/driver-bids">
         <ProtectedRoute requiredUserType="driver">
           <DriverBids />
         </ProtectedRoute>
       </Route>
-      
+
       <Route component={NotFound} />
     </Switch>
   );

@@ -1,42 +1,77 @@
-import { supabase } from "./supabase";
+// src/lib/auth.ts
+import { supabase, checkEmailExists } from "./supabase";
 import type { Profile } from "./types";
+import type { Session, User } from "@supabase/supabase-js";
 
-// Traveler Registration
+/* ------------------------------------------------------------------
+   1. SAFE SESSION HELPERS
+   ------------------------------------------------------------------ */
+export async function getCurrentSession(): Promise<Session | null> {
+  const { data, error } = await supabase.auth.getSession();
+  if (error) {
+    console.error("getSession error:", error);
+    return null;
+  }
+  return data.session;
+}
+
+export async function getCurrentUser(): Promise<User | null> {
+  const session = await getCurrentSession();
+  return session?.user ?? null;
+}
+
+/* ------------------------------------------------------------------
+   2. PROFILE FETCH (only when user exists)
+   ------------------------------------------------------------------ */
+export async function getCurrentProfile(): Promise<Profile | null> {
+  const user = await getCurrentUser();
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Profile fetch error:", error);
+    return null;
+  }
+  return data;
+}
+
+/* ------------------------------------------------------------------
+   3. SIGN-UP TRAVELER – NO MANUAL INSERT
+   ------------------------------------------------------------------ */
 export async function signUpTraveler(
   email: string,
   password: string,
   username: string
 ) {
-  const { data, error: signUpError } = await supabase.auth.signUp({
+  // 1. Check if email already exists (via Edge Function)
+  const exists = await checkEmailExists(email);
+  if (exists) {
+    throw new Error("An account with this email already exists. Please log in.");
+  }
+
+  // 2. Sign up – let DB trigger create profile
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
+    options: {
+      data: { full_name: username, user_type: "traveler" },
+    },
   });
 
-  if (signUpError) {
-    throw new Error(signUpError.message);
-  }
-
-  if (!data.user) {
-    throw new Error("User creation failed");
-  }
-
-  const { error: profileError } = await supabase.from("profiles").insert([
-    {
-      id: data.user.id,
-      full_name: username,
-      email,
-      user_type: "traveler",
-    },
-  ]);
-
-  if (profileError) {
-    throw new Error(profileError.message);
-  }
+  if (error) throw error;
+  if (!data.user) throw new Error("User creation failed");
 
   return data;
 }
 
-// Driver Registration
+/* ------------------------------------------------------------------
+   4. SIGN-UP DRIVER – NO MANUAL INSERT
+   ------------------------------------------------------------------ */
 export async function signUpDriver(
   email: string,
   password: string,
@@ -45,136 +80,86 @@ export async function signUpDriver(
   vehicleName: string,
   vehicleRegNumber: string
 ) {
-  const { data, error: signUpError } = await supabase.auth.signUp({
+  const exists = await checkEmailExists(email);
+  if (exists) {
+    throw new Error("An account with this email already exists.");
+  }
+
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
+    options: {
+      data: { full_name: fullName, user_type: "driver", age },
+    },
   });
 
-  if (signUpError) {
-    throw new Error(signUpError.message);
-  }
+  if (error) throw error;
+  if (!data.user) throw new Error("User creation failed");
 
-  if (!data.user) {
-    throw new Error("User creation failed");
-  }
-
-  // Create profile
-  const { error: profileError } = await supabase.from("profiles").insert([
+  // Insert driver_profiles (allowed by RLS if user owns row)
+  const { error: driverError } = await supabase.from("driver_profiles").insert([
     {
       id: data.user.id,
-      full_name: fullName,
-      email,
-      user_type: "driver",
+      vehicle_type: vehicleName,
+      license_plate: vehicleRegNumber,
     },
   ]);
 
-  if (profileError) {
-    throw new Error(profileError.message);
-  }
-
-  // Create driver profile
-  const { error: driverProfileError } = await supabase
-    .from("driver_profiles")
-    .insert([
-      {
-        id: data.user.id,
-        vehicle_type: vehicleName,
-        license_plate: vehicleRegNumber,
-      },
-    ]);
-
-  if (driverProfileError) {
-    throw new Error(driverProfileError.message);
-  }
+  if (driverError) throw driverError;
 
   return data;
 }
 
-// Common Sign In
+/* ------------------------------------------------------------------
+   5. SIGN IN
+   ------------------------------------------------------------------ */
 export async function signIn(emailOrUsername: string, password: string) {
-  // Check if input is email or username
   const isEmail = emailOrUsername.includes("@");
-  
   let email = emailOrUsername;
-  
-  // If username, fetch email from profiles
+
   if (!isEmail) {
-    const { data: profileData, error: profileError } = await supabase
+    const { data, error } = await supabase
       .from("profiles")
       .select("email")
       .eq("full_name", emailOrUsername)
       .single();
-
-    if (profileError || !profileData) {
-      throw new Error("User not found");
-    }
-
-    email = profileData.email;
+    if (error || !data) throw new Error("User not found");
+    email = data.email;
   }
 
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
+  if (error) throw error;
 
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  // Get user profile to determine type
   const profile = await getCurrentProfile();
-  
+  if (!profile) throw new Error("Profile not found.");
+
   return { ...data, profile };
 }
 
+/* ------------------------------------------------------------------
+   6. SIGN OUT
+   ------------------------------------------------------------------ */
 export async function signOut() {
   const { error } = await supabase.auth.signOut();
-
-  if (error) {
-    throw new Error(error.message);
-  }
+  if (error) throw error;
 }
 
-export async function getCurrentUser() {
-  const { data, error } = await supabase.auth.getUser();
-
-  if (error) {
-    return null;
-  }
-
-  return data.user;
-}
-
-export async function getCurrentProfile(): Promise<Profile | null> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return null;
-  }
-
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .single();
-
-  if (error) {
-    return null;
-  }
-
-  return data;
-}
-
-export function onAuthStateChange(callback: (user: any) => void) {
-  const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-    (async () => {
-      if (session) {
-        const profile = await getCurrentProfile();
-        callback({ user: session.user, profile });
-      } else {
-        callback(null);
-      }
-    })();
+/* ------------------------------------------------------------------
+   7. AUTH STATE LISTENER
+   ------------------------------------------------------------------ */
+export function onAuthStateChange(
+  callback: (payload: { user: User | null; profile: Profile | null } | null) => void
+) {
+  const { data } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    if (session?.user) {
+      const profile = await getCurrentProfile();
+      callback({ user: session.user, profile });
+    } else {
+      callback(null);
+    }
   });
-
   return data.subscription;
 }

@@ -1,10 +1,14 @@
+// src/lib/supabase.ts
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_SUPABASE_ANON_KEY;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+/* ------------------------------------------------------------------
+   CALL EDGE FUNCTION (with auth)
+   ------------------------------------------------------------------ */
 export async function callEdgeFunction<T>(
   functionName: string,
   method: "GET" | "POST" | "PUT" | "DELETE" = "GET",
@@ -29,10 +33,23 @@ export async function callEdgeFunction<T>(
   });
 
   if (!response.ok) {
-    const error = await response.json();
+    const error = await response.json().catch(() => ({}));
     throw new Error(error.error || "API Error");
   }
 
   const result = await response.json();
   return result.data;
+}
+
+/* ------------------------------------------------------------------
+   CHECK IF EMAIL EXISTS (via Edge Function)
+   ------------------------------------------------------------------ */
+export async function checkEmailExists(email: string): Promise<boolean> {
+  try {
+    const result = await callEdgeFunction<{ exists: boolean }>("check-email-exists", "POST", { email });
+    return result.exists;
+  } catch (err) {
+    console.error("checkEmailExists error:", err);
+    return false; // fail open – let signup try
+  }
 }

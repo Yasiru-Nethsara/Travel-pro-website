@@ -1,3 +1,4 @@
+// src/pages/Login.tsx
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import Navigation from "@/components/Navigation";
@@ -20,58 +21,40 @@ export default function Login() {
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
-
-    if (!formData.emailOrUsername) {
-      newErrors.emailOrUsername = "Email or username is required";
-    }
-
-    if (!formData.password) {
-      newErrors.password = "Password is required";
-    }
-
+    if (!formData.emailOrUsername) newErrors.emailOrUsername = "Email or username is required";
+    if (!formData.password) newErrors.password = "Password is required";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
-    }
+    if (!validateForm()) return;
 
     setIsLoading(true);
-    
     try {
       const { signIn } = await import("@/lib/auth");
-      
-      const result = await signIn(
-        formData.emailOrUsername,
-        formData.password
-      );
-      
-      // Redirect based on user type
-      if (result.profile?.user_type === "driver") {
-        setLocation("/driver-dashboard");
-      } else {
-        setLocation("/traveler-dashboard");
-      }
+      const result = await signIn(formData.emailOrUsername, formData.password);
+
+      // Listener in Navigation.tsx will update profile automatically
+      const target =
+        result.profile?.user_type === "driver" ? "/driver-dashboard" : "/traveler-dashboard";
+      setLocation(target);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Invalid credentials. Please try again.";
-      setErrors({ submit: errorMessage });
+      const msg = error instanceof Error ? error.message : "Invalid credentials.";
+      setErrors({ submit: msg });
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    // Clear error for this field
+    setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) {
-      setErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors[field];
-        return newErrors;
+      setErrors((prev) => {
+        const copy = { ...prev };
+        delete copy[field];
+        return copy;
       });
     }
   };
@@ -103,7 +86,6 @@ export default function Login() {
                   placeholder="Enter your email or username"
                   value={formData.emailOrUsername}
                   onChange={(e) => handleChange("emailOrUsername", e.target.value)}
-                  data-testid="input-email-username"
                 />
                 {errors.emailOrUsername && (
                   <p className="text-sm text-destructive">{errors.emailOrUsername}</p>
@@ -123,19 +105,11 @@ export default function Login() {
                   placeholder="Enter your password"
                   value={formData.password}
                   onChange={(e) => handleChange("password", e.target.value)}
-                  data-testid="input-password"
                 />
-                {errors.password && (
-                  <p className="text-sm text-destructive">{errors.password}</p>
-                )}
+                {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
               </div>
 
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={isLoading}
-                data-testid="button-submit"
-              >
+              <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? "Logging in..." : "Log In"}
               </Button>
 

@@ -1,8 +1,9 @@
+// src/components/Navigation.tsx
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Menu, X, MapPin, LogOut, User } from "lucide-react";
 import { useState, useEffect } from "react";
-import { getCurrentProfile, signOut } from "@/lib/auth";
+import { signOut, onAuthStateChange } from "@/lib/auth";
 import type { Profile } from "@/lib/types";
 import {
   DropdownMenu,
@@ -16,23 +17,32 @@ import {
 export default function Navigation() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
   const [, setLocation] = useLocation();
 
+  // ----------------------------------------------------------------
+  // 1. Subscribe to Supabase auth changes (restores session on reload)
+  // ----------------------------------------------------------------
   useEffect(() => {
-    const loadProfile = async () => {
-      const userProfile = await getCurrentProfile();
-      setProfile(userProfile);
-    };
-    loadProfile();
+    const { unsubscribe } = onAuthStateChange((payload) => {
+      setProfile(payload?.profile ?? null);
+      setLoading(false);
+    });
+
+    // initial check (in case listener fires after mount)
+    return () => unsubscribe();
   }, []);
 
+  // ----------------------------------------------------------------
+  // 2. Logout
+  // ----------------------------------------------------------------
   const handleLogout = async () => {
     try {
       await signOut();
       setProfile(null);
       setLocation("/");
-    } catch (error) {
-      console.error("Logout failed:", error);
+    } catch (err) {
+      console.error("Logout error:", err);
     }
   };
 
@@ -40,6 +50,16 @@ export default function Navigation() {
     if (!profile) return "/";
     return profile.user_type === "driver" ? "/driver-dashboard" : "/traveler-dashboard";
   };
+
+  if (loading) {
+    return (
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b border-border/50">
+        <div className="max-w-7xl mx-auto px-4 lg:px-8 h-20 flex items-center justify-center">
+          <div className="text-sm text-muted-foreground">Loading…</div>
+        </div>
+      </nav>
+    );
+  }
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b border-border/50 shadow-sm">
@@ -71,7 +91,7 @@ export default function Navigation() {
             </Link>
           </div>
 
-          {/* Desktop Auth Buttons */}
+          {/* Desktop Auth */}
           <div className="hidden md:flex items-center gap-3">
             {profile ? (
               <DropdownMenu>
@@ -102,9 +122,9 @@ export default function Navigation() {
                 <Button variant="ghost" asChild className="font-medium rounded-xl">
                   <Link href="/login">Log In</Link>
                 </Button>
-                <Button 
-                  variant="default" 
-                  asChild 
+                <Button
+                  variant="default"
+                  asChild
                   className="font-semibold rounded-xl shadow-lg shadow-primary/30"
                 >
                   <Link href="/register">Register</Link>
@@ -140,7 +160,7 @@ export default function Navigation() {
               <Link href="/support" className="text-sm font-medium text-foreground hover:text-primary px-4 py-3 rounded-lg transition-colors">
                 Support
               </Link>
-              
+
               <div className="flex flex-col gap-3 mt-6 pt-6 border-t border-border/50">
                 {profile ? (
                   <>

@@ -1,3 +1,4 @@
+// src/pages/TravelerRegister.tsx
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import Navigation from "@/components/Navigation";
@@ -6,7 +7,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription
+
+ } from "@/components/ui/alert";
 import { AlertCircle, CheckCircle } from "lucide-react";
 
 export default function TravelerRegister() {
@@ -54,44 +57,34 @@ export default function TravelerRegister() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
-    }
+
+    if (!validateForm()) return;
 
     setIsLoading(true);
-    
+    setErrors({});
+    setSuccess(false);
+
     try {
       const { signUpTraveler } = await import("@/lib/auth");
-      
-      await signUpTraveler(
-        formData.email,
-        formData.password,
-        formData.username
-      );
-      
+      await signUpTraveler(formData.email, formData.password, formData.username);
+
       setSuccess(true);
-      
-      // Redirect to login after 2 seconds
-      setTimeout(() => {
-        setLocation("/login");
-      }, 2000);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Registration failed. Please try again.";
-      setErrors({ submit: errorMessage });
+      setTimeout(() => setLocation("/login"), 2000);
+    } catch (error: any) {
+      const msg = error.message || "Registration failed. Please try again.";
+      setErrors({ submit: msg });
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    // Clear error for this field
+    setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) {
-      setErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors[field];
-        return newErrors;
+      setErrors((prev) => {
+        const copy = { ...prev };
+        delete copy[field];
+        return copy;
       });
     }
   };
@@ -131,11 +124,8 @@ export default function TravelerRegister() {
                     placeholder="your.email@example.com"
                     value={formData.email}
                     onChange={(e) => handleChange("email", e.target.value)}
-                    data-testid="input-email"
                   />
-                  {errors.email && (
-                    <p className="text-sm text-destructive">{errors.email}</p>
-                  )}
+                  {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -146,11 +136,8 @@ export default function TravelerRegister() {
                     placeholder="Choose a username"
                     value={formData.username}
                     onChange={(e) => handleChange("username", e.target.value)}
-                    data-testid="input-username"
                   />
-                  {errors.username && (
-                    <p className="text-sm text-destructive">{errors.username}</p>
-                  )}
+                  {errors.username && <p className="text-sm text-destructive">{errors.username}</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -161,11 +148,8 @@ export default function TravelerRegister() {
                     placeholder="Create a password"
                     value={formData.password}
                     onChange={(e) => handleChange("password", e.target.value)}
-                    data-testid="input-password"
                   />
-                  {errors.password && (
-                    <p className="text-sm text-destructive">{errors.password}</p>
-                  )}
+                  {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -176,19 +160,13 @@ export default function TravelerRegister() {
                     placeholder="Confirm your password"
                     value={formData.confirmPassword}
                     onChange={(e) => handleChange("confirmPassword", e.target.value)}
-                    data-testid="input-confirm-password"
                   />
                   {errors.confirmPassword && (
                     <p className="text-sm text-destructive">{errors.confirmPassword}</p>
                   )}
                 </div>
 
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={isLoading}
-                  data-testid="button-submit"
-                >
+                <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? "Creating Account..." : "Create Account"}
                 </Button>
 

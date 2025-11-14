@@ -43,7 +43,7 @@ export async function checkEmailExists(email: string): Promise<boolean> {
     const result = await callEdgeFunction<{ exists: boolean }>("check-email-exists", {
       method: "POST",
       body: { email },
-    });
+    }); 
     return result.exists;
   } catch (err) {
     console.error("checkEmailExists error:", err);

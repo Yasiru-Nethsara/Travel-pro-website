@@ -1,3 +1,4 @@
+// src/lib/api.ts
 import { supabase, callEdgeFunction } from "./supabase";
 import type {
   Trip,
@@ -9,33 +10,41 @@ import type {
   Profile,
 } from "./types";
 
+export async function getMyTrips(
+  limit: number = 10,
+  offset: number = 0
+): Promise<Trip[]> {
+  const result = await callEdgeFunction<{ data: Trip[] }>("get-my-trips", {
+    method: "GET",
+    body: { limit, offset },
+  });
+  return result.data;
+}
+
 export async function getTrips(
   status: string = "open",
   limit: number = 10,
   offset: number = 0
 ): Promise<Trip[]> {
-  return callEdgeFunction<Trip[]>(
-    `get-trips?status=${status}&limit=${limit}&offset=${offset}`,
-    "GET"
-  );
+  const result = await callEdgeFunction<{ data: Trip[] }>("get-trips", {
+    method: "GET",
+    body: { status, limit, offset },
+  });
+  return result.data;
 }
 
 export async function createTrip(payload: CreateTripPayload): Promise<Trip> {
-  return callEdgeFunction<Trip>("create-trip", "POST", payload);
-}
-
-export async function getMyTrips(
-  limit: number = 10,
-  offset: number = 0
-): Promise<Trip[]> {
-  return callEdgeFunction<Trip[]>(
-    `get-my-trips?limit=${limit}&offset=${offset}`,
-    "GET"
-  );
+  return callEdgeFunction<Trip>("create-trip", {
+    method: "POST",
+    body: payload,
+  });
 }
 
 export async function submitBid(payload: SubmitBidPayload): Promise<DriverBid> {
-  return callEdgeFunction<DriverBid>("submit-bid", "POST", payload);
+  return callEdgeFunction<DriverBid>("submit-bid", {
+    method: "POST",
+    body: payload,
+  });
 }
 
 export async function getMyBids(
@@ -43,11 +52,11 @@ export async function getMyBids(
   limit: number = 10,
   offset: number = 0
 ): Promise<DriverBid[]> {
-  let url = `get-my-bids?limit=${limit}&offset=${offset}`;
-  if (status) {
-    url += `&status=${status}`;
-  }
-  return callEdgeFunction<DriverBid[]>(url, "GET");
+  const result = await callEdgeFunction<{ data: DriverBid[] }>("get-my-bids", {
+    method: "GET",
+    body: { limit, offset, status },
+  });
+  return result.data;
 }
 
 export async function acceptBid(payload: AcceptBidPayload): Promise<{
@@ -57,11 +66,17 @@ export async function acceptBid(payload: AcceptBidPayload): Promise<{
   return callEdgeFunction<{
     bid: DriverBid;
     booking: Booking;
-  }>("accept-bid", "POST", payload);
+  }>("accept-bid", {
+    method: "POST",
+    body: payload,
+  });
 }
 
 export async function rejectBid(bidId: string): Promise<void> {
-  const { error } = await supabase.from("driver_bids").update({ status: "rejected" }).eq("id", bidId);
+  const { error } = await supabase
+    .from("driver_bids")
+    .update({ status: "rejected" })
+    .eq("id", bidId);
 
   if (error) {
     throw new Error(error.message);
@@ -95,7 +110,7 @@ export async function updateProfile(payload: Partial<Profile>): Promise<Profile>
     .update(payload)
     .eq("id", sessionData.session?.user.id)
     .select()
-    .maybeSingle();
+    .maybeSingle(); // ← FIXED: was "mabyeSingle"
 
   if (error) {
     throw new Error(error.message);
@@ -113,7 +128,9 @@ export async function getMyBookings(): Promise<Booking[]> {
   const { data, error } = await supabase
     .from("bookings")
     .select("*")
-    .or(`driver_id.eq.${sessionData.session.user.id},trip_id.in(${sessionData.session.user.id})`)
+    .or(
+      `driver_id.eq.${sessionData.session.user.id},trip_id.in(${sessionData.session.user.id})`
+    )
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -151,7 +168,8 @@ export async function getConversation(userId: string, bookingId?: string) {
     .from("messages")
     .select("*")
     .or(
-      `and(sender_id.eq.${sessionData.session?.user.id},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${sessionData.session?.user.id})`
+      `and(sender_id.eq.${sessionData.session?.user.id},receiver_id.eq.${userId}),` +
+      `and(sender_id.eq.${userId},receiver_id.eq.${sessionData.session?.user.id})`
     );
 
   if (bookingId) {
@@ -165,4 +183,22 @@ export async function getConversation(userId: string, bookingId?: string) {
   }
 
   return data;
+}
+
+export async function getBidsForTrip(tripId: string): Promise<DriverBid[]> {
+  const { data, error } = await supabase
+    .from("driver_bids")
+    .select(`
+      *,
+      driver:profiles!driver_id(*),
+      trip:trips(*)
+    `)
+    .eq("trip_id", tripId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data || [];
 }

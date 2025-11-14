@@ -7,38 +7,32 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 /* ------------------------------------------------------------------
-   CALL EDGE FUNCTION (with auth)
+   CALL EDGE FUNCTION (USING .invoke() — AUTO ADDS AUTH + APIKEY)
    ------------------------------------------------------------------ */
 export async function callEdgeFunction<T>(
   functionName: string,
-  method: "GET" | "POST" | "PUT" | "DELETE" = "GET",
-  body?: unknown
+  options: {
+    method?: "GET" | "POST" | "PUT" | "DELETE";
+    body?: unknown;
+  } = {}
 ): Promise<T> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData?.session?.access_token;
-
-  if (!token) {
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  
+  if (sessionError || !session) {
     throw new Error("Not authenticated");
   }
 
-  const apiUrl = `${supabaseUrl}/functions/v1/${functionName}`;
-
-  const response = await fetch(apiUrl, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: body ? JSON.stringify(body) : undefined,
+  const { data, error } = await supabase.functions.invoke(functionName, {
+    method: options.method || "GET",
+    body: options.body as any, // ← FIXED: cast to any
   });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.error || "API Error");
+  if (error) {
+    console.error("Edge Function Error:", error);
+    throw new Error(error.message || "Failed to call function");
   }
 
-  const result = await response.json();
-  return result.data;
+  return data as T;
 }
 
 /* ------------------------------------------------------------------
@@ -46,10 +40,13 @@ export async function callEdgeFunction<T>(
    ------------------------------------------------------------------ */
 export async function checkEmailExists(email: string): Promise<boolean> {
   try {
-    const result = await callEdgeFunction<{ exists: boolean }>("check-email-exists", "POST", { email });
+    const result = await callEdgeFunction<{ exists: boolean }>("check-email-exists", {
+      method: "POST",
+      body: { email },
+    });
     return result.exists;
   } catch (err) {
     console.error("checkEmailExists error:", err);
-    return false; // fail open – let signup try
+    return false;
   }
 }

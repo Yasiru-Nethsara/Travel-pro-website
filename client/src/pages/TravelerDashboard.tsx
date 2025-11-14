@@ -1,57 +1,58 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import TripSummaryCard from "@/components/TripSummaryCard";
-import { Plus } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import { Link } from "wouter";
+import { getMyTrips } from "@/lib/api";
+import type { Trip } from "@/lib/types";
 
 export default function TravelerDashboard() {
   const [activeTab, setActiveTab] = useState("active");
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const activeTrips = [
-    {
-      tripId: "1",
-      startLocation: "New York, NY",
-      endLocation: "Boston, MA",
-      startDate: "Dec 15, 2:00 PM",
-      endDate: "Dec 18, 6:00 PM",
-      vehicleType: "Van",
-      seats: 6,
-      hasAC: true,
-      price: 450,
-      status: "confirmed" as const,
-      stops: ["Philadelphia, PA"],
-    },
-    {
-      tripId: "2",
-      startLocation: "Los Angeles, CA",
-      endLocation: "San Diego, CA",
-      startDate: "Dec 20, 10:00 AM",
-      endDate: "Dec 20, 8:00 PM",
-      vehicleType: "Car",
-      seats: 4,
-      hasAC: true,
-      price: 180,
-      status: "pending" as const,
-    },
-  ];
+  useEffect(() => {
+    loadTrips();
+  }, []);
 
-  const pastTrips = [
-    {
-      tripId: "3",
-      startLocation: "Miami, FL",
-      endLocation: "Orlando, FL",
-      startDate: "Nov 10, 9:00 AM",
-      endDate: "Nov 12, 5:00 PM",
-      vehicleType: "Van",
-      seats: 7,
-      hasAC: true,
-      price: 280,
-      status: "completed" as const,
-    },
-  ];
+  const loadTrips = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await getMyTrips();
+      setTrips(data);
+    } catch (err) {
+      console.error("Failed to load trips:", err);
+      setError(err instanceof Error ? err.message : "Failed to load trips");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Filter trips by status
+  const activeTrips = trips.filter(
+    (trip) => trip.status === "open" || trip.status === "booked"
+  );
+  const pastTrips = trips.filter((trip) => trip.status === "cancelled");
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Navigation />
+        <main className="flex-1 pt-24 pb-16 flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+            <p className="text-muted-foreground">Loading your trips...</p>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -71,6 +72,15 @@ export default function TravelerDashboard() {
             </Button>
           </div>
 
+          {error && (
+            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-6">
+              <p className="text-sm text-destructive">{error}</p>
+              <Button variant="outline" size="sm" onClick={loadTrips} className="mt-2">
+                Try Again
+              </Button>
+            </div>
+          )}
+
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="mb-6">
               <TabsTrigger value="active" data-testid="tab-active-trips">
@@ -84,7 +94,20 @@ export default function TravelerDashboard() {
             <TabsContent value="active" className="space-y-4">
               {activeTrips.length > 0 ? (
                 activeTrips.map((trip) => (
-                  <TripSummaryCard key={trip.tripId} {...trip} />
+                  <TripSummaryCard
+                    key={trip.id}
+                    tripId={trip.id}
+                    startLocation={trip.origin}
+                    endLocation={trip.destination}
+                    startDate={new Date(trip.departure_date).toLocaleString()}
+                    endDate={new Date(trip.departure_date).toLocaleString()} // You may need to add return_date to your Trip type
+                    vehicleType={trip.description || "Vehicle"}
+                    seats={trip.seats_needed}
+                    hasAC={true} // Add this field to your Trip type if needed
+                    price={trip.max_price}
+                    status={trip.status === "open" ? "pending" : "confirmed"}
+                    stops={[]}
+                  />
                 ))
               ) : (
                 <div className="text-center py-12">
@@ -99,7 +122,20 @@ export default function TravelerDashboard() {
             <TabsContent value="past" className="space-y-4">
               {pastTrips.length > 0 ? (
                 pastTrips.map((trip) => (
-                  <TripSummaryCard key={trip.tripId} {...trip} />
+                  <TripSummaryCard
+                    key={trip.id}
+                    tripId={trip.id}
+                    startLocation={trip.origin}
+                    endLocation={trip.destination}
+                    startDate={new Date(trip.departure_date).toLocaleString()}
+                    endDate={new Date(trip.departure_date).toLocaleString()}
+                    vehicleType={trip.description || "Vehicle"}
+                    seats={trip.seats_needed}
+                    hasAC={true}
+                    price={trip.max_price}
+                    status="completed"
+                    stops={[]}
+                  />
                 ))
               ) : (
                 <div className="text-center py-12">

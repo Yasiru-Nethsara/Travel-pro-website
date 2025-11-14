@@ -33,21 +33,27 @@ const benefits = [
 
 export default function DriverBenefits() {
   return (
-    <section className="section-spacing overflow-hidden">
-      <div className="max-w-7xl mx-auto px-4 lg:px-8">
+    <section className="section-spacing overflow-hidden bg-gradient-to-b from-white via-green-50/30 to-blue-50/30 relative">
+      {/* Animated background elements */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-40 left-20 w-80 h-80 bg-green-400/10 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-20 right-20 w-96 h-96 bg-blue-400/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "1.5s" }} />
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 lg:px-8 relative z-10">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           {/* Content Side */}
           <div className="order-2 lg:order-1 space-y-8">
             <div className="space-y-6">
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent/10 border border-accent/20">
-                <span className="text-sm font-semibold text-accent">For Drivers</span>
+              <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-green-500/10 to-blue-500/10 border border-green-500/20 backdrop-blur-sm">
+                <span className="text-sm font-semibold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">For Drivers</span>
               </div>
-              
+
               <h2 className="text-3xl lg:text-5xl font-bold leading-tight">
                 Drive with
-                <span className="block text-primary mt-2">TripConnect</span>
+                <span className="block bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent mt-2">TripConnect</span>
               </h2>
-              
+
               <p className="text-lg lg:text-xl text-muted-foreground leading-relaxed">
                 Join our community of verified drivers and start earning on your own terms.
               </p>
@@ -56,10 +62,18 @@ export default function DriverBenefits() {
             <div className="grid sm:grid-cols-2 gap-6">
               {benefits.map((benefit, index) => {
                 const Icon = benefit.icon;
+                const isGreen = index % 2 === 0;
+                const gradientColors = isGreen
+                  ? "from-green-500 to-green-600"
+                  : "from-blue-500 to-blue-600";
+                const shadowColor = isGreen
+                  ? "shadow-green-500/30 group-hover:shadow-green-500/40"
+                  : "shadow-blue-500/30 group-hover:shadow-blue-500/40";
+
                 return (
-                  <Card key={index} className="p-6 hover-elevate border-2 group">
-                    <div className={`inline-flex items-center justify-center w-14 h-14 rounded-xl bg-gradient-to-br ${benefit.gradient} mb-4 group-hover:scale-110 transition-transform duration-300 shadow-lg`}>
-                      <Icon className="h-7 w-7 text-white" />
+                  <Card key={index} className={`p-6 hover-elevate border-2 bg-white/70 backdrop-blur-sm group ${shadowColor} transition-all duration-300`}>
+                    <div className={`inline-flex items-center justify-center w-16 h-16 rounded-xl bg-gradient-to-br ${gradientColors} mb-4 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shadow-lg ${shadowColor}`}>
+                      <Icon className="h-8 w-8 text-white" />
                     </div>
                     <h3 className="font-bold text-lg mb-2">{benefit.title}</h3>
                     <p className="text-sm text-muted-foreground leading-relaxed">
@@ -70,10 +84,10 @@ export default function DriverBenefits() {
               })}
             </div>
 
-            <Button 
-              size="lg" 
-              asChild 
-              className="mt-6 h-14 px-8 rounded-xl font-semibold shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40"
+            <Button
+              size="lg"
+              asChild
+              className="mt-6 h-14 px-8 rounded-xl font-semibold bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 transition-all duration-300"
             >
               <Link href="/register-driver">
                 Start Driving Today
@@ -84,31 +98,31 @@ export default function DriverBenefits() {
 
           {/* Image Side */}
           <div className="order-1 lg:order-2 relative">
-            <div className="relative rounded-2xl overflow-hidden shadow-2xl shadow-primary/20">
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-accent/10 mix-blend-overlay z-10" />
+            <div className="relative rounded-3xl overflow-hidden shadow-2xl shadow-blue-500/20 border border-white/50 backdrop-blur-sm">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-green-500/20 mix-blend-overlay z-10" />
               <img
                 src={driverImage}
                 alt="Professional driver with vehicle"
-                className="w-full h-auto relative z-0"
+                className="w-full h-auto relative z-0 hover:scale-105 transition-transform duration-700"
               />
             </div>
-            
-            {/* Decorative stat badge */}
-            <div className="absolute -bottom-6 -left-6 bg-white p-6 rounded-2xl shadow-2xl border-2 border-primary/20 hidden lg:block">
+
+            {/* Decorative stat badge with enhanced design */}
+            <div className="absolute -bottom-6 -left-6 bg-white p-6 rounded-2xl shadow-2xl border border-green-100 hidden lg:block hover:shadow-3xl transition-all duration-300 hover:-translate-y-1">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-accent to-accent/80 flex items-center justify-center shadow-lg">
-                  <TrendingUp className="h-6 w-6 text-white" />
+                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center shadow-lg shadow-green-500/30">
+                  <TrendingUp className="h-7 w-7 text-white" />
                 </div>
                 <div>
-                  <div className="text-3xl font-bold text-foreground">500+</div>
-                  <div className="text-sm text-muted-foreground">Active Drivers</div>
+                  <div className="text-3xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">500+</div>
+                  <div className="text-sm text-muted-foreground font-medium">Active Drivers</div>
                 </div>
               </div>
             </div>
-            
-            {/* Decorative elements */}
-            <div className="absolute -top-8 -right-8 w-32 h-32 bg-accent/20 rounded-full blur-3xl" />
-            <div className="absolute -bottom-8 right-12 w-40 h-40 bg-primary/20 rounded-full blur-3xl" />
+
+            {/* Enhanced decorative elements */}
+            <div className="absolute -top-8 -right-8 w-32 h-32 bg-gradient-to-br from-green-400/20 to-blue-400/20 rounded-full blur-3xl animate-pulse" />
+            <div className="absolute -bottom-12 right-12 w-40 h-40 bg-gradient-to-br from-blue-400/20 to-green-400/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "1.5s" }} />
           </div>
         </div>
       </div>

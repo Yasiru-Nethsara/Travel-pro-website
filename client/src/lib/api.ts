@@ -16,7 +16,7 @@ export async function getMyTrips(
 ): Promise<Trip[]> {
   const result = await callEdgeFunction<{ data: Trip[] }>("get-my-trips", {
     method: "GET",
-    body: { limit, offset },
+    // REMOVE BODY FROM GET
   });
   return result.data;
 }
@@ -28,7 +28,7 @@ export async function getTrips(
 ): Promise<Trip[]> {
   const result = await callEdgeFunction<{ data: Trip[] }>("get-trips", {
     method: "GET",
-    body: { status, limit, offset },
+    // REMOVE BODY FROM GET
   });
   return result.data;
 }
@@ -54,7 +54,7 @@ export async function getMyBids(
 ): Promise<DriverBid[]> {
   const result = await callEdgeFunction<{ data: DriverBid[] }>("get-my-bids", {
     method: "GET",
-    body: { limit, offset, status },
+    // REMOVE BODY FROM GET
   });
   return result.data;
 }
@@ -110,7 +110,7 @@ export async function updateProfile(payload: Partial<Profile>): Promise<Profile>
     .update(payload)
     .eq("id", sessionData.session?.user.id)
     .select()
-    .maybeSingle(); // ← FIXED: was "mabyeSingle"
+    .maybeSingle();
 
   if (error) {
     throw new Error(error.message);

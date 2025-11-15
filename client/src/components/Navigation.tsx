@@ -20,35 +20,23 @@ export default function Navigation() {
   const [loading, setLoading] = useState(true);
   const [, setLocation] = useLocation();
 
-  // ----------------------------------------------------------------
-  // 1. Subscribe to Supabase auth changes (restores session on reload)
-  // ----------------------------------------------------------------
   useEffect(() => {
     const { unsubscribe } = onAuthStateChange((payload) => {
       setProfile(payload?.profile ?? null);
       setLoading(false);
     });
 
-    // initial check (in case listener fires after mount)
     return () => unsubscribe();
   }, []);
 
-  // ----------------------------------------------------------------
-  // 2. Logout
-  // ----------------------------------------------------------------
   const handleLogout = async () => {
-    try {
-      await signOut();
-      setProfile(null);
-      setLocation("/");
-    } catch (err) {
-      console.error("Logout error:", err);
-    }
+    await signOut();
+    setProfile(null);
+    setLocation("/");
   };
 
   const getDashboardLink = () => {
-    if (!profile) return "/";
-    return profile.user_type === "driver" ? "/driver-dashboard" : "/traveler-dashboard";
+    return profile?.user_type === "driver" ? "/driver-dashboard" : "/traveler-dashboard";
   };
 
   if (loading) {
@@ -65,7 +53,6 @@ export default function Navigation() {
     <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b border-border/50 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 lg:px-8">
         <div className="flex items-center justify-between h-20">
-          {/* Logo */}
           <Link href="/" className="flex items-center gap-2.5 hover-elevate rounded-xl px-3 py-2 -ml-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg">
               <MapPin className="h-6 w-6 text-white" />
@@ -75,7 +62,6 @@ export default function Navigation() {
             </span>
           </Link>
 
-          {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-1">
             <Link href="/" className="text-sm font-medium text-foreground hover:text-primary px-4 py-2 rounded-lg transition-colors">
               Home
@@ -91,7 +77,6 @@ export default function Navigation() {
             </Link>
           </div>
 
-          {/* Desktop Auth */}
           <div className="hidden md:flex items-center gap-3">
             {profile ? (
               <DropdownMenu>
@@ -133,7 +118,6 @@ export default function Navigation() {
             )}
           </div>
 
-          {/* Mobile Menu Button */}
           <Button
             size="icon"
             variant="ghost"
@@ -144,7 +128,6 @@ export default function Navigation() {
           </Button>
         </div>
 
-        {/* Mobile Menu */}
         {mobileMenuOpen && (
           <div className="md:hidden py-6 border-t border-border/50">
             <div className="flex flex-col gap-2">
@@ -190,7 +173,7 @@ export default function Navigation() {
                 )}
               </div>
             </div>
-          </div>
+        </div>
         )}
       </div>
     </nav>

@@ -48,13 +48,11 @@ export async function signUpTraveler(
   password: string,
   username: string
 ) {
-  // 1. Check if email already exists (via Edge Function)
   const exists = await checkEmailExists(email);
   if (exists) {
     throw new Error("An account with this email already exists. Please log in.");
   }
 
-  // 2. Sign up – let DB trigger create profile
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -96,7 +94,6 @@ export async function signUpDriver(
   if (error) throw error;
   if (!data.user) throw new Error("User creation failed");
 
-  // Insert driver_profiles (allowed by RLS if user owns row)
   const { error: driverError } = await supabase.from("driver_profiles").insert([
     {
       id: data.user.id,
@@ -148,18 +145,31 @@ export async function signOut() {
 }
 
 /* ------------------------------------------------------------------
-   7. AUTH STATE LISTENER
+   7. AUTH STATE LISTENER – FIXED: NO getCurrentProfile() inside!
    ------------------------------------------------------------------ */
 export function onAuthStateChange(
   callback: (payload: { user: User | null; profile: Profile | null } | null) => void
 ) {
-  const { data } = supabase.auth.onAuthStateChange(async (_event, session) => {
+  // Initial session
+  supabase.auth.getSession().then(({ data: { session } }) => {
     if (session?.user) {
-      const profile = await getCurrentProfile();
-      callback({ user: session.user, profile });
+      getCurrentProfile().then(profile => {
+        callback({ user: session.user, profile });
+      });
     } else {
       callback(null);
     }
   });
-  return data.subscription;
+
+  // Listen for changes
+  const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
+    if (event === "SIGNED_OUT" || !session) {
+      callback(null);
+    } else if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+      const profile = await getCurrentProfile();
+      callback({ user: session.user, profile });
+    }
+  });
+
+  return { unsubscribe: data.subscription.unsubscribe };
 }

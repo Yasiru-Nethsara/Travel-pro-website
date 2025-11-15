@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { ArrowRight, Shield, DollarSign, Headphones } from "lucide-react";
-import heroImage from "@/assets/images/download.jpeg";
+import heroImage from "@/assets/images/images.jpeg";
 
 export default function HeroSection() {
   return (

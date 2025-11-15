@@ -29,7 +29,7 @@ export async function callEdgeFunction<T>(
 
   const { data, error } = await supabase.functions.invoke(functionName, {
     method: options.method || "GET",
-    body: options.body,
+    body: options.body as Record<string, unknown>,
     headers,
   });
 

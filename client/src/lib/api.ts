@@ -11,8 +11,8 @@ import type {
 } from "./types";
 
 export async function getMyTrips(
-  limit: number = 10,
-  offset: number = 0
+  _limit: number = 10,
+  _offset: number = 0
 ): Promise<Trip[]> {
   const result = await callEdgeFunction<{ data: Trip[] }>("get-my-trips", {
     method: "GET",
@@ -22,9 +22,9 @@ export async function getMyTrips(
 }
 
 export async function getTrips(
-  status: string = "open",
-  limit: number = 10,
-  offset: number = 0
+  _status: string = "open",
+  _limit: number = 10,
+  _offset: number = 0
 ): Promise<Trip[]> {
   const result = await callEdgeFunction<{ data: Trip[] }>("get-trips", {
     method: "GET",
@@ -48,9 +48,9 @@ export async function submitBid(payload: SubmitBidPayload): Promise<DriverBid> {
 }
 
 export async function getMyBids(
-  status?: string,
-  limit: number = 10,
-  offset: number = 0
+  _status?: string,
+  _limit: number = 10,
+  _offset: number = 0
 ): Promise<DriverBid[]> {
   const result = await callEdgeFunction<{ data: DriverBid[] }>("get-my-bids", {
     method: "GET",

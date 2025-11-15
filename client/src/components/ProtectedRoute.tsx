@@ -2,7 +2,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { getCurrentProfile } from "@/lib/auth";
-import type { Profile } from "@/lib/types";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;

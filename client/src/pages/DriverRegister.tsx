@@ -1,3 +1,4 @@
+// src/pages/DriverRegister.tsx
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import Navigation from "@/components/Navigation";
@@ -27,9 +28,7 @@ export default function DriverRegister() {
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
-    if (!formData.fullName) {
-      newErrors.fullName = "Full name is required";
-    }
+    if (!formData.fullName.trim()) newErrors.fullName = "Full name is required";
 
     if (!formData.age) {
       newErrors.age = "Age is required";
@@ -39,13 +38,8 @@ export default function DriverRegister() {
       newErrors.age = "Please enter a valid age";
     }
 
-    if (!formData.vehicleName) {
-      newErrors.vehicleName = "Vehicle name is required";
-    }
-
-    if (!formData.vehicleRegNumber) {
-      newErrors.vehicleRegNumber = "Vehicle registration number is required";
-    }
+    if (!formData.vehicleName.trim()) newErrors.vehicleName = "Vehicle name is required";
+    if (!formData.vehicleRegNumber.trim()) newErrors.vehicleRegNumber = "Vehicle registration number is required";
 
     if (!formData.email) {
       newErrors.email = "Email is required";
@@ -71,16 +65,14 @@ export default function DriverRegister() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
-    }
+
+    if (!validateForm()) return;
 
     setIsLoading(true);
-    
+
     try {
       const { signUpDriver } = await import("@/lib/auth");
-      
+
       await signUpDriver(
         formData.email,
         formData.password,
@@ -89,29 +81,32 @@ export default function DriverRegister() {
         formData.vehicleName,
         formData.vehicleRegNumber
       );
-      
+
       setSuccess(true);
-      
-      // Redirect to login after 2 seconds
-      setTimeout(() => {
-        setLocation("/login");
-      }, 2000);
+      setTimeout(() => setLocation("/login"), 2000);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Registration failed. Please try again.";
-      setErrors({ submit: errorMessage });
+      const msg = error instanceof Error ? error.message : "Registration failed. Please try again.";
+      setErrors({ submit: msg });
+      console.error(error);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    // Clear error for this field
+    setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) {
-      setErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors[field];
-        return newErrors;
+      setErrors((prev) => {
+        const copy = { ...prev };
+        delete copy[field];
+        return copy;
+      });
+    }
+    if (errors.submit) {
+      setErrors((prev) => {
+        const copy = { ...prev };
+        delete copy.submit;
+        return copy;
       });
     }
   };
@@ -137,7 +132,7 @@ export default function DriverRegister() {
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
                 {errors.submit && (
-                  <Alert variant="destructive">
+                  <Alert variant="destructive" className="mb-4">
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>{errors.submit}</AlertDescription>
                   </Alert>
@@ -152,10 +147,9 @@ export default function DriverRegister() {
                     value={formData.fullName}
                     onChange={(e) => handleChange("fullName", e.target.value)}
                     data-testid="input-fullname"
+                    className={errors.fullName ? "border-destructive" : ""}
                   />
-                  {errors.fullName && (
-                    <p className="text-sm text-destructive">{errors.fullName}</p>
-                  )}
+                  {errors.fullName && <p className="text-sm text-destructive">{errors.fullName}</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -169,10 +163,9 @@ export default function DriverRegister() {
                     value={formData.age}
                     onChange={(e) => handleChange("age", e.target.value)}
                     data-testid="input-age"
+                    className={errors.age ? "border-destructive" : ""}
                   />
-                  {errors.age && (
-                    <p className="text-sm text-destructive">{errors.age}</p>
-                  )}
+                  {errors.age && <p className="text-sm text-destructive">{errors.age}</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -184,10 +177,9 @@ export default function DriverRegister() {
                     value={formData.vehicleName}
                     onChange={(e) => handleChange("vehicleName", e.target.value)}
                     data-testid="input-vehicle-name"
+                    className={errors.vehicleName ? "border-destructive" : ""}
                   />
-                  {errors.vehicleName && (
-                    <p className="text-sm text-destructive">{errors.vehicleName}</p>
-                  )}
+                  {errors.vehicleName && <p className="text-sm text-destructive">{errors.vehicleName}</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -199,6 +191,7 @@ export default function DriverRegister() {
                     value={formData.vehicleRegNumber}
                     onChange={(e) => handleChange("vehicleRegNumber", e.target.value.toUpperCase())}
                     data-testid="input-vehicle-reg"
+                    className={errors.vehicleRegNumber ? "border-destructive" : ""}
                   />
                   {errors.vehicleRegNumber && (
                     <p className="text-sm text-destructive">{errors.vehicleRegNumber}</p>
@@ -214,10 +207,9 @@ export default function DriverRegister() {
                     value={formData.email}
                     onChange={(e) => handleChange("email", e.target.value)}
                     data-testid="input-email"
+                    className={errors.email ? "border-destructive" : ""}
                   />
-                  {errors.email && (
-                    <p className="text-sm text-destructive">{errors.email}</p>
-                  )}
+                  {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -229,10 +221,9 @@ export default function DriverRegister() {
                     value={formData.password}
                     onChange={(e) => handleChange("password", e.target.value)}
                     data-testid="input-password"
+                    className={errors.password ? "border-destructive" : ""}
                   />
-                  {errors.password && (
-                    <p className="text-sm text-destructive">{errors.password}</p>
-                  )}
+                  {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -244,6 +235,7 @@ export default function DriverRegister() {
                     value={formData.confirmPassword}
                     onChange={(e) => handleChange("confirmPassword", e.target.value)}
                     data-testid="input-confirm-password"
+                    className={errors.confirmPassword ? "border-destructive" : ""}
                   />
                   {errors.confirmPassword && (
                     <p className="text-sm text-destructive">{errors.confirmPassword}</p>

@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Menu, X, MapPin, LogOut, User } from "lucide-react";
 import { useState, useEffect } from "react";
-import { signOut, onAuthStateChange } from "@/lib/auth";
+import { signOut, getCurrentProfile } from "@/lib/auth"; // ← Only getCurrentProfile, NO onAuthStateChange here!
 import type { Profile } from "@/lib/types";
 import {
   DropdownMenu,
@@ -20,40 +20,51 @@ export default function Navigation() {
   const [loading, setLoading] = useState(true);
   const [, setLocation] = useLocation();
 
+  // SINGLE SOURCE OF TRUTH: Listen to auth state only once in App.tsx
+  // Here we just fetch the current profile on mount + whenever location changes
   useEffect(() => {
-    const { unsubscribe } = onAuthStateChange((payload) => {
-      setProfile(payload?.profile ?? null);
-      setLoading(false);
-    });
+    let mounted = true;
 
-    return () => unsubscribe();
-  }, []);
+    const loadProfile = async () => {
+      setLoading(true);
+      const currentProfile = await getCurrentProfile();
+      if (mounted) {
+        setProfile(currentProfile);
+        setLoading(false);
+      }
+    };
+
+    loadProfile();
+
+    return () => {
+      mounted = false;
+    };
+  }, [setLocation]); // Re-check when navigation happens (safe & lightweight)
 
   const handleLogout = async () => {
-    await signOut();
-    setProfile(null);
-    setLocation("/");
+    try {
+      await signOut();
+      // Clean up any leftover Supabase tokens
+      Object.keys(localStorage)
+        .filter((key) => key.startsWith("sb-"))
+        .forEach((key) => localStorage.removeItem(key));
+      setProfile(null);
+      setLocation("/");
+      setMobileMenuOpen(false);
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
   };
 
   const getDashboardLink = () => {
     return profile?.user_type === "driver" ? "/driver-dashboard" : "/traveler-dashboard";
   };
 
-  if (loading) {
-    return (
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b border-border/50">
-        <div className="max-w-7xl mx-auto px-4 lg:px-8 h-20 flex items-center justify-center">
-          <div className="text-sm text-muted-foreground">Loading…</div>
-        </div>
-      </nav>
-    );
-  }
-
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b border-border/50 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 lg:px-8">
         <div className="flex items-center justify-between h-20">
-          <Link href="/" className="flex items-center gap-2.5 hover-elevate rounded-xl px-3 py-2 -ml-3">
+          <Link href="/" className="flex items-center gap-2.5 rounded-xl px-3 py-2 -ml-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg">
               <MapPin className="h-6 w-6 text-white" />
             </div>
@@ -62,41 +73,37 @@ export default function Navigation() {
             </span>
           </Link>
 
-          <div className="hidden md:flex items-center gap-1">
-            <Link href="/" className="text-sm font-medium text-foreground hover:text-primary px-4 py-2 rounded-lg transition-colors">
-              Home
-            </Link>
-            <Link href="/how-it-works" className="text-sm font-medium text-foreground hover:text-primary px-4 py-2 rounded-lg transition-colors">
-              How It Works
-            </Link>
-            <Link href="/pricing" className="text-sm font-medium text-foreground hover:text-primary px-4 py-2 rounded-lg transition-colors">
-              Pricing
-            </Link>
-            <Link href="/support" className="text-sm font-medium text-foreground hover:text-primary px-4 py-2 rounded-lg transition-colors">
-              Support
-            </Link>
+          <div className="hidden md:flex items-center gap-6">
+            <Link href="/" className="text-sm font-medium hover:text-primary transition-colors">Home</Link>
+            <Link href="/how-it-works" className="text-sm font-medium hover:text-primary transition-colors">How It Works</Link>
+            <Link href="/pricing" className="text-sm font-medium hover:text-primary transition-colors">Pricing</Link>
+            <Link href="/support" className="text-sm font-medium hover:text-primary transition-colors">Support</Link>
           </div>
 
+          {/* Desktop Auth */}
           <div className="hidden md:flex items-center gap-3">
-            {profile ? (
+            {loading ? (
+              <div className="flex gap-3">
+                <div className="h-10 w-24 bg-muted/70 rounded-xl animate-pulse" />
+                <div className="h-10 w-28 bg-primary/20 rounded-xl animate-pulse" />
+              </div>
+            ) : profile ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="gap-2 font-medium rounded-xl">
+                  <Button variant="ghost" className="gap-2 font-medium">
                     <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                       <User className="h-4 w-4 text-primary" />
                     </div>
-                    {profile.full_name}
+                    {profile.full_name.split(" ")[0]}
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuContent align="end">
                   <DropdownMenuLabel>My Account</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
-                    <Link href={getDashboardLink()} className="cursor-pointer">
-                      Dashboard
-                    </Link>
+                    <Link href={getDashboardLink()}>Dashboard</Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
+                  <DropdownMenuItem onClick={handleLogout} className="text-red-600 cursor-pointer">
                     <LogOut className="h-4 w-4 mr-2" />
                     Logout
                   </DropdownMenuItem>
@@ -104,14 +111,10 @@ export default function Navigation() {
               </DropdownMenu>
             ) : (
               <>
-                <Button variant="ghost" asChild className="font-medium rounded-xl">
+                <Button variant="ghost" asChild>
                   <Link href="/login">Log In</Link>
                 </Button>
-                <Button
-                  variant="default"
-                  asChild
-                  className="font-semibold rounded-xl shadow-lg shadow-primary/30"
-                >
+                <Button asChild>
                   <Link href="/register">Register</Link>
                 </Button>
               </>
@@ -121,59 +124,66 @@ export default function Navigation() {
           <Button
             size="icon"
             variant="ghost"
-            className="md:hidden rounded-xl"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden"
+            onClick={() => setMobileMenuOpen((v) => !v)}
           >
-            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            {mobileMenuOpen ? <X /> : <Menu />}
           </Button>
         </div>
 
+        {/* Mobile Menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden py-6 border-t border-border/50">
-            <div className="flex flex-col gap-2">
-              <Link href="/" className="text-sm font-medium text-foreground hover:text-primary px-4 py-3 rounded-lg transition-colors">
-                Home
-              </Link>
-              <Link href="/how-it-works" className="text-sm font-medium text-foreground hover:text-primary px-4 py-3 rounded-lg transition-colors">
-                How It Works
-              </Link>
-              <Link href="/pricing" className="text-sm font-medium text-foreground hover:text-primary px-4 py-3 rounded-lg transition-colors">
-                Pricing
-              </Link>
-              <Link href="/support" className="text-sm font-medium text-foreground hover:text-primary px-4 py-3 rounded-lg transition-colors">
-                Support
-              </Link>
+          <div className="md:hidden py-6 border-t">
+            <div className="flex flex-col gap-4">
+              {["Home", "How It Works", "Pricing", "Support"].map((item) => (
+                <Link
+                  key={item}
+                  href={item === "Home" ? "/" : `/${item.toLowerCase().replace(" ", "-")}`}
+                  className="px-4 py-2 text-foreground hover:text-primary"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {item}
+                </Link>
+              ))}
 
-              <div className="flex flex-col gap-3 mt-6 pt-6 border-t border-border/50">
-                {profile ? (
+              <div className="mt-4 pt-4 border-t">
+                {loading ? (
+                  <div className="h-8 bg-muted/50 animate-pulse rounded mx-4" />
+                ) : profile ? (
                   <>
-                    <div className="px-4 py-2 flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <User className="h-5 w-5 text-primary" />
-                      </div>
-                      <div className="font-medium">{profile.full_name}</div>
+                    <div className="flex items-center gap-3 px-4 py-3">
+                      <User className="h-8 w-8 text-primary" />
+                      <span className="font-medium">{profile.full_name}</span>
                     </div>
-                    <Button variant="ghost" asChild className="justify-start rounded-xl">
+                    <Button
+                      variant="ghost"
+                      asChild
+                      className="w-full justify-start"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
                       <Link href={getDashboardLink()}>Dashboard</Link>
                     </Button>
-                    <Button variant="ghost" onClick={handleLogout} className="justify-start rounded-xl">
-                      <LogOut className="h-4 w-4 mr-2" />
-                      Logout
+                    <Button
+                      variant="ghost"
+                      onClick={handleLogout}
+                      className="w-full justify-start text-red-600"
+                    >
+                      <LogOut className="h-4 w-4 mr-2" /> Logout
                     </Button>
                   </>
                 ) : (
-                  <>
-                    <Button variant="ghost" asChild className="rounded-xl">
+                  <div className="flex flex-col gap-3 px-4">
+                    <Button variant="ghost" asChild onClick={() => setMobileMenuOpen(false)}>
                       <Link href="/login">Log In</Link>
                     </Button>
-                    <Button variant="default" asChild className="rounded-xl shadow-lg shadow-primary/30">
+                    <Button asChild onClick={() => setMobileMenuOpen(false)}>
                       <Link href="/register">Register</Link>
                     </Button>
-                  </>
+                  </div>
                 )}
               </div>
             </div>
-        </div>
+          </div>
         )}
       </div>
     </nav>

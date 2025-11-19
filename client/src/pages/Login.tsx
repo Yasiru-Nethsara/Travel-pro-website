@@ -1,6 +1,6 @@
 // src/pages/Login.tsx
 import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { Card } from "@/components/ui/card";
@@ -9,9 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
+import { signIn } from "@/lib/auth";
 
 export default function Login() {
-  const [, setLocation] = useLocation();
   const [formData, setFormData] = useState({
     emailOrUsername: "",
     password: "",
@@ -32,16 +32,15 @@ export default function Login() {
     if (!validateForm()) return;
 
     setIsLoading(true);
-    try {
-      const { signIn } = await import("@/lib/auth");
-      const result = await signIn(formData.emailOrUsername, formData.password);
+    setErrors({});
 
-      // Listener in Navigation.tsx will update profile automatically
-      const target =
-        result.profile?.user_type === "driver" ? "/driver-dashboard" : "/traveler-dashboard";
-      setLocation(target);
+    try {
+      await signIn(formData.emailOrUsername, formData.password);
+      // NO REDIRECT HERE ANYMORE!
+      // ProtectedRoute + updated logic below will handle it perfectly
     } catch (error) {
-      const msg = error instanceof Error ? error.message : "Invalid credentials.";
+      console.error("Login error:", error);
+      const msg = error instanceof Error ? error.message : "Invalid credentials. Please try again.";
       setErrors({ submit: msg });
     } finally {
       setIsLoading(false);
@@ -86,6 +85,7 @@ export default function Login() {
                   placeholder="Enter your email or username"
                   value={formData.emailOrUsername}
                   onChange={(e) => handleChange("emailOrUsername", e.target.value)}
+                  disabled={isLoading}
                 />
                 {errors.emailOrUsername && (
                   <p className="text-sm text-destructive">{errors.emailOrUsername}</p>
@@ -105,6 +105,7 @@ export default function Login() {
                   placeholder="Enter your password"
                   value={formData.password}
                   onChange={(e) => handleChange("password", e.target.value)}
+                  disabled={isLoading}
                 />
                 {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
               </div>

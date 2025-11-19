@@ -124,16 +124,22 @@ export async function signIn(emailOrUsername: string, password: string) {
     email = data.email;
   }
 
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
-  if (error) throw error;
+  const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
-  const profile = await getCurrentProfile();
-  if (!profile) throw new Error("Profile not found.");
+    if (signInError) throw signInError;
+    if (!signInData.session) throw new Error("No session returned");
 
-  return { ...data, profile };
+    // Force Supabase to refresh the session properly (this eliminates the double event)
+    await supabase.auth.setSession(signInData.session);
+
+    // Now safely fetch the fresh profile
+    const profile = await getCurrentProfile();
+    if (!profile) throw new Error("Profile not found after login");
+
+    return { ...signInData, profile };
 }
 
 /* ------------------------------------------------------------------
@@ -145,31 +151,59 @@ export async function signOut() {
 }
 
 /* ------------------------------------------------------------------
-   7. AUTH STATE LISTENER – FIXED: NO getCurrentProfile() inside!
+   7. AUTH STATE LISTENER – FIXED
    ------------------------------------------------------------------ */
 export function onAuthStateChange(
   callback: (payload: { user: User | null; profile: Profile | null } | null) => void
 ) {
-  // Initial session
-  supabase.auth.getSession().then(({ data: { session } }) => {
-    if (session?.user) {
-      getCurrentProfile().then(profile => {
-        callback({ user: session.user, profile });
-      });
-    } else {
+  // Set initial state as not authenticated first
+  callback(null);
+
+  // Listen for auth state changes
+  const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
+    console.log("Auth state changed:", event, session?.user?.id);
+    
+    if (event === "SIGNED_OUT" || !session) {
       callback(null);
+    } else if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+      try {
+        const profile = await getCurrentProfile();
+        callback({ user: session.user, profile });
+      } catch (error) {
+        console.error("Error fetching profile during auth state change:", error);
+        callback(null);
+      }
+    } else if (event === "INITIAL_SESSION") {
+      // Only process INITIAL_SESSION if there's actually a session
+      if (session?.user) {
+        try {
+          const profile = await getCurrentProfile();
+          callback({ user: session.user, profile });
+        } catch (error) {
+          console.error("Error fetching profile during initial session:", error);
+          callback(null);
+        }
+      } else {
+        callback(null);
+      }
     }
   });
 
-  // Listen for changes
-  const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
-    if (event === "SIGNED_OUT" || !session) {
+  // Also check initial session state after a short delay to ensure consistency
+  setTimeout(async () => {
+    try {
+      const session = await getCurrentSession();
+      if (session?.user) {
+        const profile = await getCurrentProfile();
+        callback({ user: session.user, profile });
+      } else {
+        callback(null);
+      }
+    } catch (error) {
+      console.error("Error checking initial session:", error);
       callback(null);
-    } else if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-      const profile = await getCurrentProfile();
-      callback({ user: session.user, profile });
     }
-  });
+  }, 100);
 
   return { unsubscribe: data.subscription.unsubscribe };
 }

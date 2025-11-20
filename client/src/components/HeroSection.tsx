@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { ArrowRight, Shield, DollarSign, Headphones } from "lucide-react";
-import heroImage from "@/assets/images/images.jpeg";
+import heroImage from "@/assets/images/Travel pic.png";
 
 export default function HeroSection() {
   return (
@@ -13,7 +13,7 @@ export default function HeroSection() {
           alt="Train on bridge"
           className="w-full h-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-black/30" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-black/30 to-black/10" />
       </div>
       
       <div className="max-w-7xl mx-auto px-4 lg:px-8 w-full relative z-10">
@@ -27,7 +27,10 @@ export default function HeroSection() {
 
               <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold leading-[1.1] tracking-tight text-white">
                 Connect with
-                <span className="block text-white mt-2">Trusted Drivers</span>
+                {/* ← THIS IS THE ONLY LINE YOU CHANGE */}
+                <span className="block mt-2 text-white drop-shadow-[0_0_10px_black] drop-shadow-[0_0_20px_black]">
+                  Trusted Drivers
+                </span>
                 for Your Perfect Journey
               </h1>
 

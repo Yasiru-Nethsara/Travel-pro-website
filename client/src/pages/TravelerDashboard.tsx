@@ -111,8 +111,8 @@ export default function TravelerDashboard() {
                 ))
               ) : (
                 <div className="text-center py-12">
-                  <p className="text-muted-foreground mb-4">No active trips</p>
-                  <Button asChild>
+                  <p className="text-muted-foreground mb-6 text-lg md:text-xl font-large">No Active Trips</p>
+                  <Button asChild size="lg">
                     <Link href="/book-trip">Book Your First Trip</Link>
                   </Button>
                 </div>

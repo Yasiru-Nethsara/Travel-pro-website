@@ -22,16 +22,47 @@ export default function BookingForm() {
   const [selectedVehicle, setSelectedVehicle] = useState<string | null>(null);
   const [hasAC, setHasAC] = useState(true);
 
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+  const [dateError, setDateError] = useState<string>("");
+
+  const now = new Date();
+  const formattedNow = now.toISOString().slice(0, 16); // "YYYY-MM-DDTHH:MM"
+
   const handleNext = () => {
+    if (currentStep === 0) {
+      if (!startDate || !endDate) {
+        setDateError("Both dates are required.");
+        return;
+      }
+      if (new Date(startDate) < new Date()) {
+        setDateError("Start date cannot be in the past.");
+        return;
+      }
+      if (new Date(endDate) < new Date(startDate)) {
+        setDateError("Return date cannot be before start date.");
+        return;
+      }
+      setDateError(""); // clear error
+    }
+
     if (currentStep < steps.length - 1) {
       setCurrentStep(currentStep + 1);
-      console.log('Moving to step:', currentStep + 2);
     }
   };
 
   const handleBack = () => {
     if (currentStep > 0) {
       setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const handleStartDateChange = (value: string) => {
+    setStartDate(value);
+
+    // Automatically adjust endDate if it's before the new startDate
+    if (endDate && new Date(endDate) < new Date(value)) {
+      setEndDate(value);
     }
   };
 
@@ -57,6 +88,9 @@ export default function BookingForm() {
                     <Input
                       id="start-date"
                       type="datetime-local"
+                      value={startDate}
+                      onChange={(e) => handleStartDateChange(e.target.value)}
+                      min={formattedNow}
                       data-testid="input-start-date"
                     />
                   </div>
@@ -65,10 +99,18 @@ export default function BookingForm() {
                     <Input
                       id="end-date"
                       type="datetime-local"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      min={startDate || formattedNow}
                       data-testid="input-end-date"
                     />
                   </div>
                 </div>
+                {dateError && (
+                  <p className="text-red-500 text-sm mt-2" data-testid="error-date">
+                    {dateError}
+                  </p>
+                )}
               </div>
             )}
 

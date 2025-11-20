@@ -9,41 +9,48 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children, requiredUserType }: ProtectedRouteProps) {
-  const [location, setLocation] = useLocation();
+  const [, setLocation] = useLocation();
   const [isReady, setIsReady] = useState(false);
+  const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
     let mounted = true;
 
     const checkAuth = async () => {
-      const profile = await getCurrentProfile();
+      try {
+        setIsChecking(true);
+        
+        // Get current profile
+        const profile = await getCurrentProfile();
 
-      if (!mounted) return;
+        if (!mounted) return;
 
-      // 1. Not logged in → force login
-      if (!profile) {
-        setLocation("/login");
-        return;
-      }
+        // Not logged in → redirect to login
+        if (!profile) {
+          setLocation("/login");
+          return;
+        }
 
-      // 2. Logged in but on public pages (home, login, register) → redirect to correct dashboard
-      const publicPages = ["/", "/login", "/register", "/register-driver"];
-      if (publicPages.includes(location)) {
-        const target = profile.user_type === "driver" ? "/driver-dashboard" : "/traveler-dashboard";
-        setLocation(target);
-        return;
-      }
+        // Wrong role for this route → redirect to correct dashboard
+        if (requiredUserType && profile.user_type !== requiredUserType) {
+          const target = profile.user_type === "driver" 
+            ? "/driver-dashboard" 
+            : "/traveler-dashboard";
+          setLocation(target);
+          return;
+        }
 
-      // 3. Wrong role for this protected route → send to correct dashboard
-      if (requiredUserType && profile.user_type !== requiredUserType) {
-        const target = profile.user_type === "driver" ? "/driver-dashboard" : "/traveler-dashboard";
-        setLocation(target);
-        return;
-      }
-
-      // 4. Everything perfect → render the dashboard!
-      if (mounted) {
+        // Everything is correct → show the page
         setIsReady(true);
+      } catch (error) {
+        console.error("Auth check error:", error);
+        if (mounted) {
+          setLocation("/login");
+        }
+      } finally {
+        if (mounted) {
+          setIsChecking(false);
+        }
       }
     };
 
@@ -52,9 +59,10 @@ export default function ProtectedRoute({ children, requiredUserType }: Protected
     return () => {
       mounted = false;
     };
-  }, [location, requiredUserType, setLocation]);
+  }, [requiredUserType, setLocation]);
 
-  if (!isReady) {
+  // Show loading state while checking
+  if (isChecking || !isReady) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-muted/30">
         <div className="text-center space-y-4">

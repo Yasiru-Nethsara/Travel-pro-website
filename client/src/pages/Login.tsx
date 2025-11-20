@@ -1,6 +1,6 @@
 // src/pages/Login.tsx
-import { useState } from "react";
-import { Link } from "wouter";
+import { useState, useEffect } from "react";
+import { Link, useLocation } from "wouter";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { Card } from "@/components/ui/card";
@@ -9,15 +9,43 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
-import { signIn } from "@/lib/auth";
+import { signIn, getCurrentProfile } from "@/lib/auth";
 
 export default function Login() {
+  const [, setLocation] = useLocation();
   const [formData, setFormData] = useState({
     emailOrUsername: "",
     password: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
+
+  // Check if user is already logged in
+  useEffect(() => {
+    let mounted = true;
+
+    const checkExistingAuth = async () => {
+      try {
+        const profile = await getCurrentProfile();
+        if (profile && mounted) {
+          // User is already logged in, redirect to their dashboard
+          const target = profile.user_type === "driver" 
+            ? "/driver-dashboard" 
+            : "/traveler-dashboard";
+          setLocation(target);
+        }
+      } catch (error) {
+        // User is not logged in, stay on login page
+        console.log("Not logged in");
+      }
+    };
+
+    checkExistingAuth();
+
+    return () => {
+      mounted = false;
+    };
+  }, [setLocation]);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -35,9 +63,14 @@ export default function Login() {
     setErrors({});
 
     try {
-      await signIn(formData.emailOrUsername, formData.password);
-      // NO REDIRECT HERE ANYMORE!
-      // ProtectedRoute + updated logic below will handle it perfectly
+      const result = await signIn(formData.emailOrUsername, formData.password);
+      
+      // Redirect based on user type
+      const target = result.profile.user_type === "driver" 
+        ? "/driver-dashboard" 
+        : "/traveler-dashboard";
+      
+      setLocation(target);
     } catch (error) {
       console.error("Login error:", error);
       const msg = error instanceof Error ? error.message : "Invalid credentials. Please try again.";

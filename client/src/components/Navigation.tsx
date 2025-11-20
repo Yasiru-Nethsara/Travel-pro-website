@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Menu, X, MapPin, LogOut, User } from "lucide-react";
 import { useState, useEffect } from "react";
-import { signOut, getCurrentProfile } from "@/lib/auth"; // ← Only getCurrentProfile, NO onAuthStateChange here!
+import { signOut, getCurrentProfile } from "@/lib/auth";
 import type { Profile } from "@/lib/types";
 import {
   DropdownMenu,
@@ -20,17 +20,26 @@ export default function Navigation() {
   const [loading, setLoading] = useState(true);
   const [, setLocation] = useLocation();
 
-  // SINGLE SOURCE OF TRUTH: Listen to auth state only once in App.tsx
-  // Here we just fetch the current profile on mount + whenever location changes
+  // Load profile on mount and when location changes
   useEffect(() => {
     let mounted = true;
 
     const loadProfile = async () => {
-      setLoading(true);
-      const currentProfile = await getCurrentProfile();
-      if (mounted) {
-        setProfile(currentProfile);
-        setLoading(false);
+      try {
+        setLoading(true);
+        const currentProfile = await getCurrentProfile();
+        if (mounted) {
+          setProfile(currentProfile);
+        }
+      } catch (error) {
+        console.error("Error loading profile:", error);
+        if (mounted) {
+          setProfile(null);
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
@@ -39,7 +48,7 @@ export default function Navigation() {
     return () => {
       mounted = false;
     };
-  }, [setLocation]); // Re-check when navigation happens (safe & lightweight)
+  }, []); // Only run once on mount
 
   const handleLogout = async () => {
     try {

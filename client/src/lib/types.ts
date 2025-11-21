@@ -118,3 +118,24 @@ export interface AcceptBidPayload {
   bid_id: string;
   pickup_time: string;
 }
+
+// Add to client/src/lib/types.ts
+
+export interface DriverNotification {
+  id: string;
+  driver_id: string;
+  trip_id: string;
+  trip_details: {
+    origin: string;
+    destination: string;
+    departure_date: string;
+    seats_needed: number;
+    max_price: number;
+    traveler_name: string;
+    traveler_phone: string;
+  };
+  vehicle_match: string | null;
+  status: "unread" | "read" | "archived";
+  created_at: string;
+  read_at: string | null;
+}

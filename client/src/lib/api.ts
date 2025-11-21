@@ -202,3 +202,10 @@ export async function getBidsForTrip(tripId: string): Promise<DriverBid[]> {
 
   return data || [];
 }
+
+export async function notifyDriversOfTrip(tripId: string): Promise<void> {
+  return callEdgeFunction<void>("notify-drivers", {
+    method: "POST",
+    body: { trip_id: tripId },
+  });
+}

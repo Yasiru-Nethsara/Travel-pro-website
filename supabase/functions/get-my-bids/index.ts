@@ -1,81 +1,68 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+// supabase/functions/get-my-bids/index.ts
+
+import "jsr:@supabase/functions-js/edge-runtime.d.ts"
+import { createClient } from "npm:@supabase/supabase-js@2"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+} as const
 
-Deno.serve(async (req: Request) => {
+const supabase = createClient(
+  Deno.env.get("SUPABASE_URL")!,
+  Deno.env.get("SUPABASE_ANON_KEY")!
+)
+
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
+    return new Response(null, { status: 204, headers: corsHeaders })
   }
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const token = req.headers.get("Authorization")?.replace("Bearer ", "")
+    if (!token) return new Response(JSON.stringify({ data: [] }), { headers: corsHeaders })
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") || "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "",
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    const { data: { user } } = await supabase.auth.getUser(token)
+    if (!user) return new Response(JSON.stringify({ data: [] }), { headers: corsHeaders })
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return new Response(
-        JSON.stringify({ error: "User not found" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const url = new URL(req.url);
-    const status = url.searchParams.get("status");
-    const limit = parseInt(url.searchParams.get("limit") || "10");
-    const offset = parseInt(url.searchParams.get("offset") || "0");
-
-    let query = supabase
+    const { data, error } = await supabase
       .from("driver_bids")
-      .select(
-        `*,
-        trip:trips(*),
-        traveler:profiles!trips(traveler_id)(*)
-      `
-      )
-      .eq("driver_id", user.id);
-
-    if (status) {
-      query = query.eq("status", status);
-    }
-
-    const { data: bids, error } = await query
+      .select(`
+        id,
+        bid_amount,
+        vehicle_type,
+        license_plate,
+        notes,
+        status,
+        created_at,
+        trip:trips!trip_id (
+          id,
+          origin,
+          destination,
+          departure_date,
+          seats_needed,
+          max_price,
+          description
+        )
+      `)
+      .eq("driver_id", user.id)
       .order("created_at", { ascending: false })
-      .range(offset, offset + limit - 1);
 
     if (error) {
-      throw error;
+      console.error("get-my-bids error:", error)
+      return new Response(JSON.stringify({ data: [] }), { headers: corsHeaders })
     }
 
-    return new Response(JSON.stringify({ data: bids }), {
+    return new Response(JSON.stringify({ data: data || [] }), {
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  } catch (error) {
-    console.error("Error:", error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Internal server error" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    })
+  } catch (err: any) {
+    console.error("get-my-bids fatal error:", err)
+    return new Response(JSON.stringify({ data: [] }), {
+      status: 200,
+      headers: corsHeaders,
+    })
   }
-});
+})

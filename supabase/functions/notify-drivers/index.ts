@@ -1,11 +1,5 @@
-// supabase/functions/notify-drivers/index.ts
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-} as const
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -71,6 +65,18 @@ Deno.serve(async (req: Request) => {
       throw new Error("Failed to fetch drivers");
     }
 
+    // If no verified drivers, still return success
+    if (!drivers || drivers.length === 0) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          notifications_sent: 0,
+          message: "No verified drivers to notify",
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Create notifications for all drivers
     const notifications = drivers.map((driver) => ({
       driver_id: driver.id,
@@ -84,7 +90,7 @@ Deno.serve(async (req: Request) => {
         traveler_name: trip.traveler?.full_name,
         traveler_phone: trip.traveler?.phone,
       },
-      vehicle_match: driver.vehicle_type, // Drivers can filter by this
+      vehicle_match: driver.vehicle_type,
       status: "unread",
       created_at: new Date().toISOString(),
     }));
@@ -96,27 +102,15 @@ Deno.serve(async (req: Request) => {
       .select();
 
     if (notifError) {
-      throw new Error("Failed to save notifications");
+      console.error("Notification error:", notifError);
+      // Don't fail the whole request if notifications fail
     }
-
-    // Optional: Send real-time broadcast via Supabase Realtime
-    // This allows drivers to get instant updates if subscribed
-    const channel = supabase.channel(`trip-${trip_id}`);
-    await channel.send({
-      type: "broadcast",
-      event: "new_trip",
-      payload: {
-        trip_id,
-        trip_details: trip,
-        driver_count: drivers.length,
-      },
-    });
 
     return new Response(
       JSON.stringify({
         success: true,
-        notifications_sent: savedNotifications.length,
-        message: `Notifications sent to ${savedNotifications.length} drivers`,
+        notifications_sent: savedNotifications?.length || 0,
+        message: `Notifications sent to ${savedNotifications?.length || 0} drivers`,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

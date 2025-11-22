@@ -16,7 +16,6 @@ export async function getMyTrips(
 ): Promise<Trip[]> {
   const result = await callEdgeFunction<{ data: Trip[] }>("get-my-trips", {
     method: "GET",
-    // REMOVE BODY FROM GET
   });
   return result.data;
 }
@@ -28,23 +27,24 @@ export async function getTrips(
 ): Promise<Trip[]> {
   const result = await callEdgeFunction<{ data: Trip[] }>("get-trips", {
     method: "GET",
-    // REMOVE BODY FROM GET
   });
   return result.data;
 }
 
 export async function createTrip(payload: CreateTripPayload): Promise<Trip> {
-  return callEdgeFunction<Trip>("create-trip", {
+  const result = await callEdgeFunction<{ data: Trip }>("create-trip", {
     method: "POST",
     body: payload,
   });
+  return result.data;
 }
 
 export async function submitBid(payload: SubmitBidPayload): Promise<DriverBid> {
-  return callEdgeFunction<DriverBid>("submit-bid", {
+  const result = await callEdgeFunction<{ data: DriverBid }>("submit-bid", {
     method: "POST",
     body: payload,
   });
+  return result.data;
 }
 
 export async function getMyBids(
@@ -54,7 +54,6 @@ export async function getMyBids(
 ): Promise<DriverBid[]> {
   const result = await callEdgeFunction<{ data: DriverBid[] }>("get-my-bids", {
     method: "GET",
-    // REMOVE BODY FROM GET
   });
   return result.data;
 }
@@ -63,13 +62,11 @@ export async function acceptBid(payload: AcceptBidPayload): Promise<{
   bid: DriverBid;
   booking: Booking;
 }> {
-  return callEdgeFunction<{
-    bid: DriverBid;
-    booking: Booking;
-  }>("accept-bid", {
+  const result = await callEdgeFunction<{ data: { bid: DriverBid; booking: Booking } }>("accept-bid", {
     method: "POST",
     body: payload,
   });
+  return result.data;
 }
 
 export async function rejectBid(bidId: string): Promise<void> {
@@ -190,8 +187,7 @@ export async function getBidsForTrip(tripId: string): Promise<DriverBid[]> {
     .from("driver_bids")
     .select(`
       *,
-      driver:profiles!driver_id(*),
-      trip:trips(*)
+      driver:profiles!driver_id(id, full_name, email, phone, avatar_url)
     `)
     .eq("trip_id", tripId)
     .order("created_at", { ascending: false });
@@ -204,7 +200,7 @@ export async function getBidsForTrip(tripId: string): Promise<DriverBid[]> {
 }
 
 export async function notifyDriversOfTrip(tripId: string): Promise<void> {
-  return callEdgeFunction<void>("notify-drivers", {
+  await callEdgeFunction<void>("notify-drivers", {
     method: "POST",
     body: { trip_id: tripId },
   });

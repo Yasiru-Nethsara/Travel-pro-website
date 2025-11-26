@@ -1,118 +1,186 @@
-// src/lib/api.ts
-import { supabase, callEdgeFunction } from "./supabase";
-import type {
-  Trip,
-  DriverBid,
-  Booking,
-  CreateTripPayload,
-  SubmitBidPayload,
-  AcceptBidPayload,
-  Profile,
-  DriverDetails,
-} from "./types";
+import { supabase } from "./supabase";
+import type { Trip, DriverBid, Profile, Booking, DriverDetails } from "./types";
 
-export async function getMyTrips(): Promise<Trip[]> {
+async function callEdgeFunction<T>(
+  functionName: string,
+  options: { method: string; body?: any }
+): Promise<T> {
   const { data: sessionData } = await supabase.auth.getSession();
-  if (!sessionData.session) return [];
 
-  const { data, error } = await supabase
-    .from("trips")
-    .select("*, traveler:profiles!traveler_id(*)")
-    .eq("traveler_id", sessionData.session.user.id)
-    .order("created_at", { ascending: false });
+  const response = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${functionName}`,
+    {
+      method: options.method,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${sessionData.session?.access_token}`,
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined,
+    }
+  );
 
-  if (error) throw new Error(error.message);
-  return data || [];
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error || `HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
 }
 
 export async function getTrips(
-  status: "open" | "booked" | "completed" = "open",
-  limit = 50,
-  offset = 0
+  status?: string,
+  limit?: number,
+  offset?: number
 ): Promise<Trip[]> {
-  const { data, error } = await supabase
+  let query = supabase
     .from("trips")
-    .select("*, traveler:profiles!traveler_id(*)")
-    .eq("status", status)
-    .range(offset, offset + limit - 1)
+    .select(`
+      *,
+      traveler:profiles!trips_traveler_id_fkey(id, full_name, email, phone, avatar_url)
+    `)
     .order("created_at", { ascending: false });
 
-  if (error) throw new Error(error.message);
+  if (status) {
+    query = query.eq("status", status);
+  }
+
+  if (limit) {
+    query = query.limit(limit);
+  }
+
+  if (offset) {
+    query = query.range(offset, offset + (limit || 10) - 1);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
   return data || [];
 }
 
-export async function createTrip(payload: CreateTripPayload): Promise<Trip> {
+export async function getMyTrips(): Promise<Trip[]> {
   const { data: sessionData } = await supabase.auth.getSession();
-  if (!sessionData.session) throw new Error("Not authenticated");
+  if (!sessionData.session) {
+    return [];
+  }
 
   const { data, error } = await supabase
     .from("trips")
-    .insert([{ ...payload, traveler_id: sessionData.session.user.id, status: "open" }])
-    .select("*, traveler:profiles!traveler_id(*)")
+    .select(`
+      *,
+      traveler:profiles!trips_traveler_id_fkey(id, full_name, email, phone, avatar_url, phone_number)
+    `)
+    .eq("traveler_id", sessionData.session.user.id)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data || [];
+}
+
+export async function createTrip(payload: {
+  origin: string;
+  destination: string;
+  departure_date: string;
+  return_date?: string;
+  seats_needed: number;
+  max_price: number;
+  description?: string;
+  ac_required?: boolean;
+  vehicle_type?: string;
+}): Promise<Trip> {
+  const { data: sessionData } = await supabase.auth.getSession();
+
+  const { data, error } = await supabase
+    .from("trips")
+    .insert([
+      {
+        ...payload,
+        traveler_id: sessionData.session?.user.id,
+        status: "open",
+      },
+    ])
+    .select("*")
     .single();
 
-  if (error) throw new Error(error.message);
-  
-  // Try to notify drivers, but don't fail if it fails (Edge Function might be down)
-  try {
-    await notifyDriversOfTrip(data.id);
-  } catch (e) {
-    console.warn("Failed to notify drivers:", e);
+  if (error) {
+    throw new Error(error.message);
   }
 
   return data;
 }
 
-export async function submitBid(payload: SubmitBidPayload): Promise<DriverBid> {
+export async function submitBid(payload: {
+  trip_id: string;
+  bid_amount: number;
+  vehicle_type: string;
+  license_plate?: string;
+  vehicle_color?: string;
+  notes?: string;
+}): Promise<DriverBid> {
   const { data: sessionData } = await supabase.auth.getSession();
-  if (!sessionData.session) throw new Error("Not authenticated");
 
   const { data, error } = await supabase
     .from("driver_bids")
-    .insert([{ 
-      ...payload, 
-      driver_id: sessionData.session.user.id, 
-      status: "pending" 
-    }])
-    .select("*, driver:profiles!driver_id(*)")
+    .insert([
+      {
+        ...payload,
+        driver_id: sessionData.session?.user.id,
+        status: "pending",
+      },
+    ])
+    .select("*")
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    throw new Error(error.message);
+  }
+
   return data;
 }
 
 export async function getMyBids(): Promise<DriverBid[]> {
   const { data: sessionData } = await supabase.auth.getSession();
-  if (!sessionData.session) return [];
+  if (!sessionData.session) {
+    return [];
+  }
 
   const { data, error } = await supabase
     .from("driver_bids")
-    .select("*, trip:trips(*, traveler:profiles!traveler_id(*))")
+    .select(`
+      *,
+      trip:trips(*, traveler:profiles!trips_traveler_id_fkey(id, full_name, email, phone, avatar_url)),
+      driver:profiles!driver_id(id, full_name, email, phone, avatar_url)
+    `)
     .eq("driver_id", sessionData.session.user.id)
     .order("created_at", { ascending: false });
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    throw new Error(error.message);
+  }
+
   return data || [];
 }
 
-export async function acceptBid(payload: AcceptBidPayload): Promise<{
-  bid: DriverBid;
-  booking: Booking;
-}> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  if (!sessionData.session) throw new Error("Not authenticated");
-
-  // 1. Update Bid Status
+export async function acceptBid(payload: {
+  bid_id: string;
+  pickup_time: string;
+}): Promise<{ bid: DriverBid; booking: Booking }> {
   const { data: bid, error: bidError } = await supabase
     .from("driver_bids")
     .update({ status: "accepted" })
     .eq("id", payload.bid_id)
-    .select("*, driver:profiles!driver_id(*)")
+    .select("*")
     .single();
 
   if (bidError) throw new Error(bidError.message);
 
-  // 2. Update Trip Status
+  // Update trip status to booked
   const { error: tripError } = await supabase
     .from("trips")
     .update({ status: "booked" })
@@ -120,7 +188,7 @@ export async function acceptBid(payload: AcceptBidPayload): Promise<{
 
   if (tripError) throw new Error(tripError.message);
 
-  // 3. Create Booking
+  // Create booking
   const { data: booking, error: bookingError } = await supabase
     .from("bookings")
     .insert([{
@@ -333,4 +401,36 @@ export async function completeTrip(tripId: string): Promise<void> {
   if (error) {
     throw new Error(error.message);
   }
+}
+
+export async function createReview(payload: {
+  trip_id: string;
+  reviewee_id: string;
+  rating: number;
+  comment: string;
+}) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) throw new Error("Not authenticated");
+
+  const { error } = await supabase
+    .from("reviews")
+    .insert([{
+      ...payload,
+      reviewer_id: sessionData.session.user.id
+    }]);
+
+  if (error) throw new Error(error.message);
+}
+
+export async function getTripReview(tripId: string) {
+  const { data, error } = await supabase
+    .from("reviews")
+    .select("*")
+    .eq("trip_id", tripId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+  return data;
 }

@@ -6,8 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DollarSign, MapPin, Loader2, Car, Calendar, Users, Wind, Check, Phone, User, ArrowRight, Bus, Truck, CheckCircle2 } from "lucide-react";
-import { getTrips, submitBid, getMyBids, getDriverDetails, updateDriverDetails, completeTrip } from "@/lib/api";
+import {
+  DollarSign, MapPin, Loader2, Car, Calendar, Users, Wind, Check,
+  Phone, User, ArrowRight, Bus, Truck, CheckCircle2, Star, Shield,
+  Clock, Map, ChevronRight, Settings
+} from "lucide-react";
+import { getTrips, submitBid, getMyBids, getDriverDetails, updateDriverDetails, completeTrip, getTripReview } from "@/lib/api";
 import type { Trip, DriverBid } from "@/lib/types";
 import {
   Select,
@@ -28,6 +32,7 @@ export default function DriverDashboard() {
   const [submittingBid, setSubmittingBid] = useState<string | null>(null);
   const [bidAmounts, setBidAmounts] = useState<Record<string, string>>({});
   const [showBidInput, setShowBidInput] = useState<Record<string, boolean>>({});
+  const [tripReviews, setTripReviews] = useState<Record<string, any>>({});
 
   // Settings State
   const [vehicleType, setVehicleType] = useState("");
@@ -58,6 +63,24 @@ export default function DriverDashboard() {
 
       setRequests(tripsData);
       setMyBids(bidsData);
+
+      // Load reviews for completed trips
+      const completedBids = bidsData.filter(b => b.trip?.status === "completed");
+      const reviewsMap: Record<string, any> = {};
+
+      await Promise.all(completedBids.map(async (bid) => {
+        if (bid.trip_id) {
+          try {
+            const review = await getTripReview(bid.trip_id);
+            if (review) {
+              reviewsMap[bid.trip_id] = review;
+            }
+          } catch (e) {
+            console.error(`Failed to load review for trip ${bid.trip_id}`, e);
+          }
+        }
+      }));
+      setTripReviews(reviewsMap);
 
       const amounts: Record<string, string> = {};
       tripsData.forEach(trip => {
@@ -207,26 +230,34 @@ export default function DriverDashboard() {
     {
       label: "Available Trips",
       value: filteredRequests.length.toString(),
-      icon: Car,
+      icon: Map,
+      color: "text-blue-600",
+      bg: "bg-blue-100",
       clickable: false
     },
     {
       label: "Pending Bids",
       value: pendingBids.length.toString(),
-      icon: DollarSign,
+      icon: Clock,
+      color: "text-orange-600",
+      bg: "bg-orange-100",
       clickable: false
     },
     {
-      label: "Accepted Bids",
+      label: "Active Trips",
       value: acceptedBids.length.toString(),
-      icon: Check,
+      icon: Car,
+      color: "text-green-600",
+      bg: "bg-green-100",
       clickable: true,
       onClick: () => setActiveTab("accepted")
     },
     {
-      label: "Past Trips",
+      label: "Completed",
       value: pastTrips.length.toString(),
       icon: CheckCircle2,
+      color: "text-purple-600",
+      bg: "bg-purple-100",
       clickable: true,
       onClick: () => setActiveTab("past")
     },
@@ -234,12 +265,16 @@ export default function DriverDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col">
+      <div className="min-h-screen flex flex-col bg-slate-50">
         <Navigation />
         <main className="flex-1 pt-24 pb-16 flex items-center justify-center">
-          <div className="text-center">
-            <Loader2 className="h-10 w-10 animate-spin mx-auto mb-4 text-primary" />
-            <p className="text-muted-foreground">Loading available trips...</p>
+          <div className="text-center space-y-4">
+            <div className="relative w-20 h-20 mx-auto">
+              <div className="absolute inset-0 border-4 border-slate-200 rounded-full"></div>
+              <div className="absolute inset-0 border-4 border-primary rounded-full border-t-transparent animate-spin"></div>
+              <Car className="absolute inset-0 m-auto h-8 w-8 text-primary" />
+            </div>
+            <p className="text-muted-foreground font-medium animate-pulse">Finding nearby trips...</p>
           </div>
         </main>
         <Footer />
@@ -250,79 +285,137 @@ export default function DriverDashboard() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
       <Navigation />
-      <main className="flex-1 pt-24 pb-16">
-        <div className="max-w-7xl mx-auto px-4 lg:px-8">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold mb-2">Driver Dashboard</h1>
-            <p className="text-muted-foreground">
-              Browse available trips and manage your bookings
-            </p>
-          </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+      {/* Hero Section */}
+      <div className="bg-slate-900 text-white pt-28 pb-32 px-4 lg:px-8 relative overflow-hidden">
+        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center opacity-10"></div>
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-slate-900/90"></div>
+
+        <div className="max-w-7xl mx-auto relative z-10">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Badge className="bg-primary hover:bg-primary text-white border-none px-3 py-1">
+                  Driver Portal
+                </Badge>
+                {vehicleType && (
+                  <Badge variant="outline" className="text-slate-300 border-slate-600">
+                    {vehicleType} Driver
+                  </Badge>
+                )}
+              </div>
+              <h1 className="text-3xl md:text-4xl font-bold mb-2">Welcome Back</h1>
+              <p className="text-slate-300 max-w-xl">
+                Find your next trip, manage your bids, and track your earnings all in one place.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                onClick={() => setActiveTab("settings")}
+                variant="outline"
+                className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white backdrop-blur-sm"
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                Settings
+              </Button>
+              <Button
+                onClick={() => loadData()}
+                className="bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20"
+              >
+                Refresh Board
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <main className="flex-1 -mt-20 relative z-20 pb-16 px-4 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+
+          {/* Stats Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             {stats.map((stat) => {
               const Icon = stat.icon;
               return (
                 <Card
                   key={stat.label}
-                  className={`p-6 border-slate-200 ${stat.clickable ? 'cursor-pointer hover:shadow-lg hover:scale-105 transition-all duration-200' : ''}`}
+                  className={`border-none shadow-lg overflow-hidden relative group ${stat.clickable ? 'cursor-pointer hover:-translate-y-1 transition-transform duration-300' : ''}`}
                   onClick={stat.onClick}
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground font-medium">{stat.label}</p>
-                      <p className="text-3xl font-bold mt-1 text-slate-900">{stat.value}</p>
-                      {stat.clickable && stat.value !== "0" && (
-                        <p className="text-xs text-primary mt-2 font-medium">Click to view →</p>
+                  <div className="p-5">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className={`p-3 rounded-xl ${stat.bg}`}>
+                        <Icon className={`h-6 w-6 ${stat.color}`} />
+                      </div>
+                      {stat.clickable && (
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                          <ChevronRight className="h-5 w-5 text-slate-400" />
+                        </div>
                       )}
                     </div>
-                    <div className="p-4 bg-primary/10 rounded-full">
-                      <Icon className="h-6 w-6 text-primary" />
+                    <div>
+                      <p className="text-3xl font-bold text-slate-900 mb-1">{stat.value}</p>
+                      <p className="text-sm font-medium text-muted-foreground">{stat.label}</p>
                     </div>
                   </div>
+                  <div className={`h-1 w-full ${stat.bg.replace('bg-', 'bg-gradient-to-r from-transparent via-')}`} />
                 </Card>
               );
             })}
           </div>
 
           {error && (
-            <Card className="bg-red-50 border-red-200 p-6 mb-8">
-              <p className="text-red-700 font-medium">{error}</p>
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-8 flex items-center gap-3 text-red-700">
+              <Shield className="h-5 w-5 flex-shrink-0" />
+              <p className="font-medium">{error}</p>
               <button
                 onClick={loadData}
-                className="mt-3 text-sm font-medium text-red-700 underline hover:no-underline"
+                className="ml-auto text-sm font-bold underline hover:no-underline"
               >
-                ↻ Try Again
+                Try Again
               </button>
-            </Card>
+            </div>
           )}
 
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="mb-6 bg-white border p-1 rounded-xl">
-              <TabsTrigger value="available" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                Available Trips ({filteredRequests.length})
-              </TabsTrigger>
-              <TabsTrigger value="accepted" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                My Accepted Trips ({acceptedBids.length})
-              </TabsTrigger>
-              <TabsTrigger value="past" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                Past Trips ({pastTrips.length})
-              </TabsTrigger>
-              <TabsTrigger value="settings" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                Settings
-              </TabsTrigger>
-            </TabsList>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
+            <div className="bg-white p-1.5 rounded-xl shadow-sm border inline-flex">
+              <TabsList className="bg-transparent h-auto p-0 gap-1">
+                <TabsTrigger
+                  value="available"
+                  className="px-6 py-2.5 rounded-lg data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:shadow-md transition-all"
+                >
+                  Available Trips
+                  <Badge className="ml-2 bg-slate-100 text-slate-900 hover:bg-slate-200 border-none">
+                    {filteredRequests.length}
+                  </Badge>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="accepted"
+                  className="px-6 py-2.5 rounded-lg data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:shadow-md transition-all"
+                >
+                  My Trips
+                  <Badge className="ml-2 bg-slate-100 text-slate-900 hover:bg-slate-200 border-none">
+                    {acceptedBids.length}
+                  </Badge>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="past"
+                  className="px-6 py-2.5 rounded-lg data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:shadow-md transition-all"
+                >
+                  History
+                </TabsTrigger>
+                <TabsTrigger
+                  value="settings"
+                  className="px-6 py-2.5 rounded-lg data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:shadow-md transition-all"
+                >
+                  Settings
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
             {/* AVAILABLE TRIPS TAB */}
-            <TabsContent value="available">
-              <div className="mb-6">
-                <h2 className="text-2xl font-bold mb-2 text-slate-900">Available Trips</h2>
-                <p className="text-muted-foreground">
-                  {filteredRequests.length} trip{filteredRequests.length !== 1 ? "s" : ""} available for bidding
-                </p>
-              </div>
-
+            <TabsContent value="available" className="space-y-6">
               {filteredRequests.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {filteredRequests.map((trip) => {
@@ -332,97 +425,108 @@ export default function DriverDashboard() {
                     const bidAmount = bidAmounts[trip.id] || trip.max_price.toString();
 
                     return (
-                      <Card key={trip.id} className="group hover:shadow-xl transition-all duration-300 border-slate-200 overflow-hidden">
-                        <div className="p-6 space-y-6">
-                          {/* Header */}
-                          <div className="flex items-start gap-4">
-                            <div className="p-2 bg-primary/5 rounded-lg group-hover:bg-primary/10 transition-colors">
-                              <MapPin className="h-6 w-6 text-primary" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 text-slate-900 font-semibold text-lg">
-                                <span className="truncate">{trip.origin}</span>
-                                <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                <span className="truncate">{trip.destination}</span>
+                      <Card key={trip.id} className="group hover:shadow-xl transition-all duration-300 border-slate-200 overflow-hidden flex flex-col">
+                        {/* Card Header with Map Visual */}
+                        <div className="h-32 bg-slate-100 relative overflow-hidden">
+                          <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1569336415962-a4bd9f69cd83?q=80&w=2069&auto=format&fit=crop')] bg-cover bg-center opacity-10"></div>
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="flex items-center gap-8 text-slate-400">
+                              <MapPin className="h-6 w-6" />
+                              <div className="h-0.5 w-24 bg-slate-300 relative">
+                                <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-slate-300"></div>
                               </div>
+                              <MapPin className="h-6 w-6" />
                             </div>
                           </div>
-
-                          {/* Details Grid */}
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div className="flex items-center gap-2 text-muted-foreground bg-slate-50 p-2 rounded-md">
-                              <Calendar className="h-4 w-4" />
-                              <span>{new Date(trip.departure_date).toLocaleDateString()}</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-muted-foreground bg-slate-50 p-2 rounded-md">
-                              <Users className="h-4 w-4" />
-                              <span>{trip.seats_needed} seats</span>
-                            </div>
-                            {trip.vehicle_type && (
-                              <div className="flex items-center gap-2 text-primary bg-primary/5 p-2 rounded-md font-medium">
-                                <Car className="h-4 w-4" />
-                                <span>{trip.vehicle_type}</span>
-                              </div>
-                            )}
-                            {trip.description?.toLowerCase().includes("ac") && (
-                              <div className="flex items-center gap-2 text-blue-600 bg-blue-50 p-2 rounded-md font-medium">
-                                <Wind className="h-4 w-4" />
-                                <span>AC</span>
-                              </div>
-                            )}
+                          <div className="absolute top-3 right-3">
+                            <Badge className="bg-white/90 text-slate-900 hover:bg-white shadow-sm backdrop-blur-sm">
+                              {new Date(trip.departure_date).toLocaleDateString()}
+                            </Badge>
                           </div>
+                        </div>
 
-                          <div className="border-t border-slate-100 pt-4">
-                            <div className="flex items-end justify-between mb-4">
-                              <div>
-                                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Max Budget</div>
-                                <div className="text-2xl font-bold text-primary">${trip.max_price}</div>
-                              </div>
-                            </div>
-
-                            {existingBid && (
-                              <div className={`p-3 rounded-lg mb-3 border ${existingBid.status === "accepted"
-                                ? "bg-green-50 border-green-200 text-green-700"
-                                : existingBid.status === "rejected"
-                                  ? "bg-red-50 border-red-200 text-red-700"
-                                  : "bg-blue-50 border-blue-200 text-blue-700"
-                                }`}>
-                                <div className="flex items-center justify-between">
-                                  <span className="text-sm font-semibold flex items-center gap-2">
-                                    {existingBid.status === "accepted" && <><Check className="h-4 w-4" /> Bid Accepted!</>}
-                                    {existingBid.status === "rejected" && "✗ Bid Rejected"}
-                                    {existingBid.status === "pending" && "⏳ Bid Pending"}
-                                  </span>
-                                  <span className="font-bold">${existingBid.bid_amount}</span>
+                        <div className="p-6 flex-1 flex flex-col">
+                          {/* Route Info */}
+                          <div className="mb-6 relative">
+                            <div className="absolute left-2.5 top-2 bottom-2 w-0.5 bg-slate-200"></div>
+                            <div className="space-y-6">
+                              <div className="flex items-start gap-4 relative">
+                                <div className="w-5 h-5 rounded-full border-4 border-green-500 bg-white z-10 flex-shrink-0"></div>
+                                <div>
+                                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-0.5">Origin</p>
+                                  <p className="font-semibold text-slate-900 leading-tight">{trip.origin}</p>
                                 </div>
                               </div>
+                              <div className="flex items-start gap-4 relative">
+                                <div className="w-5 h-5 rounded-full border-4 border-red-500 bg-white z-10 flex-shrink-0"></div>
+                                <div>
+                                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-0.5">Destination</p>
+                                  <p className="font-semibold text-slate-900 leading-tight">{trip.destination}</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Trip Specs */}
+                          <div className="flex flex-wrap gap-2 mb-6">
+                            <Badge variant="secondary" className="bg-slate-100 text-slate-700 hover:bg-slate-200">
+                              <Users className="h-3 w-3 mr-1" />
+                              {trip.seats_needed} Seats
+                            </Badge>
+                            {trip.vehicle_type && (
+                              <Badge variant="secondary" className="bg-slate-100 text-slate-700 hover:bg-slate-200">
+                                <Car className="h-3 w-3 mr-1" />
+                                {trip.vehicle_type}
+                              </Badge>
                             )}
+                            {trip.description?.toLowerCase().includes("ac") && (
+                              <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-100">
+                                <Wind className="h-3 w-3 mr-1" />
+                                AC
+                              </Badge>
+                            )}
+                          </div>
+
+                          <div className="mt-auto pt-6 border-t border-slate-100">
+                            <div className="flex items-end justify-between mb-4">
+                              <div>
+                                <p className="text-xs font-medium text-muted-foreground uppercase">Budget</p>
+                                <p className="text-2xl font-bold text-primary">${trip.max_price}</p>
+                              </div>
+                              {existingBid && (
+                                <Badge className={`
+                                  ${existingBid.status === "accepted" ? "bg-green-100 text-green-700" :
+                                    existingBid.status === "rejected" ? "bg-red-100 text-red-700" :
+                                      "bg-blue-100 text-blue-700"}
+                                `}>
+                                  {existingBid.status === "accepted" ? "Bid Accepted" :
+                                    existingBid.status === "rejected" ? "Bid Rejected" :
+                                      "Bid Pending"}
+                                </Badge>
+                              )}
+                            </div>
 
                             {!existingBid || existingBid.status === "rejected" ? (
                               !showInput ? (
-                                <div className="flex gap-2">
+                                <div className="grid grid-cols-2 gap-3">
                                   <Button
                                     variant="outline"
-                                    className="flex-1 border-primary/20 hover:bg-primary/5 hover:text-primary"
+                                    className="w-full"
                                     onClick={() => setShowBidInput(prev => ({ ...prev, [trip.id]: true }))}
                                     disabled={isSubmitting}
                                   >
                                     Custom Bid
                                   </Button>
                                   <Button
-                                    className="flex-1 shadow-md hover:shadow-lg transition-all"
+                                    className="w-full bg-slate-900 hover:bg-slate-800"
                                     onClick={() => handleAcceptPrice(trip.id, trip.max_price)}
                                     disabled={isSubmitting}
                                   >
-                                    {isSubmitting ? (
-                                      <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                      `Accept $${trip.max_price}`
-                                    )}
+                                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Accept"}
                                   </Button>
                                 </div>
                               ) : (
-                                <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                                <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2">
                                   <div className="flex gap-2">
                                     <div className="relative flex-1">
                                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
@@ -431,25 +535,22 @@ export default function DriverDashboard() {
                                         value={bidAmount}
                                         onChange={(e) => handleBidInputChange(trip.id, e.target.value)}
                                         className="pl-7"
-                                        placeholder="Enter amount"
+                                        placeholder="Amount"
                                         min="1"
                                       />
                                     </div>
                                     <Button
                                       onClick={() => handleSubmitBid(trip.id, parseFloat(bidAmount))}
                                       disabled={isSubmitting}
+                                      className="bg-primary hover:bg-primary/90"
                                     >
-                                      {isSubmitting ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                      ) : (
-                                        "Submit"
-                                      )}
+                                      {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send"}
                                     </Button>
                                   </div>
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="w-full text-muted-foreground hover:text-slate-900"
+                                    className="w-full h-8 text-xs text-muted-foreground"
                                     onClick={() => setShowBidInput(prev => ({ ...prev, [trip.id]: false }))}
                                   >
                                     Cancel
@@ -457,9 +558,9 @@ export default function DriverDashboard() {
                                 </div>
                               )
                             ) : existingBid.status === "pending" ? (
-                              <p className="text-center text-sm text-muted-foreground bg-slate-50 py-2 rounded-md">
-                                Waiting for traveler's response...
-                              </p>
+                              <div className="text-center py-2 bg-slate-50 rounded-lg border border-slate-100">
+                                <p className="text-sm font-medium text-slate-600">You bid ${existingBid.bid_amount}</p>
+                              </div>
                             ) : null}
                           </div>
                         </div>
@@ -468,314 +569,287 @@ export default function DriverDashboard() {
                   })}
                 </div>
               ) : (
-                <Card className="p-16 text-center border-dashed border-2">
-                  <div className="mx-auto w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6">
-                    <Car className="h-10 w-10 text-slate-300" />
+                <div className="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-slate-200">
+                  <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <Map className="h-10 w-10 text-slate-300" />
                   </div>
-                  <h3 className="text-xl font-semibold mb-2">No trips available yet</h3>
+                  <h3 className="text-xl font-bold text-slate-900 mb-2">No trips available</h3>
                   <p className="text-muted-foreground max-w-md mx-auto">
-                    When travelers post new trips matching your vehicle type, they will appear here instantly.
+                    There are no open trips matching your vehicle type right now. Check back later!
                   </p>
-                </Card>
+                </div>
               )}
             </TabsContent>
 
             {/* ACCEPTED TRIPS TAB */}
-            <TabsContent value="accepted">
-              <div className="mb-6">
-                <h2 className="text-2xl font-bold mb-2">My Accepted Trips</h2>
-                <p className="text-muted-foreground">
-                  {acceptedBids.length} trip{acceptedBids.length !== 1 ? "s" : ""} where your bid was accepted
-                </p>
-              </div>
-
+            <TabsContent value="accepted" className="space-y-6">
               {acceptedBids.length > 0 ? (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {acceptedBids.map((bid) => {
                     const trip = bid.trip;
-
-                    if (!trip) {
-                      return (
-                        <Card key={bid.id} className="p-6 border-2 border-yellow-200 bg-yellow-50/30">
-                          <div className="text-center">
-                            <p className="text-sm text-muted-foreground">
-                              Trip details not available for bid #{bid.id.slice(0, 8)}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-2">
-                              Bid Amount: ${bid.bid_amount}
-                            </p>
-                          </div>
-                        </Card>
-                      );
-                    }
+                    if (!trip) return null;
 
                     return (
-                      <Card key={bid.id} className="p-6 border-2 border-green-200 bg-green-50/30 shadow-sm">
-                        <div className="space-y-4">
-                          {/* Header with status badge */}
-                          <div className="flex items-start justify-between">
-                            <Badge className="bg-green-600 hover:bg-green-700 px-3 py-1 text-sm">
-                              <Check className="h-3 w-3 mr-1" />
-                              Accepted
-                            </Badge>
-                            <div className="text-right">
-                              <div className="text-sm text-muted-foreground">Your Bid</div>
-                              <div className="text-2xl font-bold text-green-600">${bid.bid_amount}</div>
+                      <Card key={bid.id} className="overflow-hidden border-green-200 bg-green-50/30">
+                        <div className="bg-green-600 px-6 py-3 flex justify-between items-center text-white">
+                          <div className="flex items-center gap-2 font-medium">
+                            <CheckCircle2 className="h-5 w-5" />
+                            Trip Confirmed
+                          </div>
+                          <div className="font-bold text-lg">${bid.bid_amount}</div>
+                        </div>
+
+                        <div className="p-6">
+                          <div className="flex items-start gap-4 mb-6">
+                            <div className="flex flex-col items-center gap-1 mt-1">
+                              <div className="w-3 h-3 rounded-full bg-green-600"></div>
+                              <div className="w-0.5 h-12 bg-green-200"></div>
+                              <div className="w-3 h-3 rounded-full bg-green-600"></div>
+                            </div>
+                            <div className="flex-1 space-y-4">
+                              <div>
+                                <p className="text-xs text-green-700 font-medium uppercase">Pickup</p>
+                                <p className="font-semibold text-slate-900 text-lg">{trip.origin}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-green-700 font-medium uppercase">Dropoff</p>
+                                <p className="font-semibold text-slate-900 text-lg">{trip.destination}</p>
+                              </div>
                             </div>
                           </div>
 
-                          {/* Route Information */}
-                          <div className="border-t border-green-200/50 pt-4">
-                            <div className="flex items-start gap-3 mb-4">
-                              <MapPin className="h-5 w-5 text-green-700 mt-0.5 flex-shrink-0" />
-                              <div className="flex-1">
-                                <div className="font-semibold text-lg text-green-900">{trip.origin}</div>
-                                <div className="text-sm text-green-700 my-1">to</div>
-                                <div className="font-semibold text-lg text-green-900">{trip.destination}</div>
-                              </div>
-                            </div>
-
-                            {/* Trip Details */}
-                            <div className="grid grid-cols-2 gap-3 mb-4">
-                              <div className="flex items-center gap-2 text-sm text-green-800">
+                          <div className="grid grid-cols-2 gap-4 mb-6 p-4 bg-white/60 rounded-xl border border-green-100">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-green-100 rounded-lg text-green-700">
                                 <Calendar className="h-4 w-4" />
-                                <span>{new Date(trip.departure_date).toLocaleDateString()}</span>
                               </div>
-                              <div className="flex items-center gap-2 text-sm text-green-800">
+                              <div>
+                                <p className="text-xs text-muted-foreground">Date</p>
+                                <p className="font-medium text-slate-900">{new Date(trip.departure_date).toLocaleDateString()}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-green-100 rounded-lg text-green-700">
                                 <Users className="h-4 w-4" />
-                                <span>{trip.seats_needed} seats</span>
                               </div>
-                            </div>
-
-                            {/* Traveler Information */}
-                            <div className="bg-white/80 rounded-lg p-4 border border-green-200">
-                              <div className="flex items-center gap-2 mb-3">
-                                <User className="h-4 w-4 text-green-700" />
-                                <span className="font-semibold text-green-900">Traveler Information</span>
-                              </div>
-                              <div className="space-y-2 text-sm">
-                                <div className="flex items-center gap-2">
-                                  <User className="h-4 w-4 text-muted-foreground" />
-                                  <span>{trip.profiles?.full_name || "Traveler"}</span>
-                                </div>
-                                {trip.profiles?.phone && (
-                                  <div className="flex items-center gap-2">
-                                    <Phone className="h-4 w-4 text-muted-foreground" />
-                                    <a
-                                      href={`tel:${trip.profiles.phone}`}
-                                      className="text-primary hover:underline font-medium"
-                                    >
-                                      {trip.profiles.phone}
-                                    </a>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Your Bid Details */}
-                            {bid.notes && (
-                              <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                                <div className="text-sm font-medium text-blue-900 mb-1">Your Note:</div>
-                                <div className="text-sm text-blue-800">{bid.notes}</div>
-                              </div>
-                            )}
-
-                            {/* Vehicle Details */}
-                            <div className="mt-4 p-3 bg-white/50 rounded-lg border border-green-100">
-                              <div className="text-sm font-medium mb-2 text-green-900">Your Vehicle</div>
-                              <div className="text-sm text-green-800">
-                                {bid.vehicle_type} • {bid.license_plate}
-                                {bid.vehicle_color && ` • ${bid.vehicle_color}`}
+                              <div>
+                                <p className="text-xs text-muted-foreground">Passengers</p>
+                                <p className="font-medium text-slate-900">{trip.seats_needed} People</p>
                               </div>
                             </div>
                           </div>
 
-                          {/* Action Button */}
-                          <Button className="w-full bg-green-600 hover:bg-green-700 text-white shadow-md">
-                            <Phone className="h-4 w-4 mr-2" />
-                            Contact Traveler
-                          </Button>
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-3 p-3 bg-white rounded-lg border border-slate-200">
+                              <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
+                                <User className="h-5 w-5 text-slate-500" />
+                              </div>
+                              <div className="flex-1">
+                                <p className="font-medium text-slate-900">{trip.profiles?.full_name || "Traveler"}</p>
+                                <p className="text-xs text-muted-foreground">Passenger</p>
+                              </div>
+                              {trip.profiles?.phone && (
+                                <Button size="sm" variant="outline" className="gap-2" asChild>
+                                  <a href={`tel:${trip.profiles.phone}`}>
+                                    <Phone className="h-3 w-3" />
+                                    Call
+                                  </a>
+                                </Button>
+                              )}
+                            </div>
 
-                          <Button
-                            className="w-full bg-green-600 hover:bg-green-700 text-white shadow-md mt-2"
-                            onClick={() => handleCompleteTrip(trip.id)}
-                          >
-                            <CheckCircle2 className="h-4 w-4 mr-2" />
-                            Complete Trip
-                          </Button>
+                            <Button
+                              className="w-full bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-200"
+                              onClick={() => handleCompleteTrip(trip.id)}
+                            >
+                              <CheckCircle2 className="h-4 w-4 mr-2" />
+                              Mark Trip as Completed
+                            </Button>
+                          </div>
                         </div>
                       </Card>
                     );
                   })}
                 </div>
               ) : (
-                <Card className="p-16 text-center border-dashed border-2">
-                  <div className="mx-auto w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mb-6">
-                    <Check className="h-10 w-10 text-green-600" />
+                <div className="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-slate-200">
+                  <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <CheckCircle2 className="h-10 w-10 text-green-500" />
                   </div>
-                  <h3 className="text-xl font-semibold mb-2">No accepted bids yet</h3>
+                  <h3 className="text-xl font-bold text-slate-900 mb-2">No active trips</h3>
                   <p className="text-muted-foreground max-w-md mx-auto">
-                    When travelers accept your bids, they will appear here with full trip details.
+                    You don't have any confirmed trips yet. Browse available trips and start bidding!
                   </p>
-                </Card>
+                </div>
               )}
             </TabsContent>
 
             {/* PAST TRIPS TAB */}
-            <TabsContent value="past">
-              <div className="mb-6">
-                <h2 className="text-2xl font-bold mb-2">Past Trips</h2>
-                <p className="text-muted-foreground">
-                  {pastTrips.length} completed trip{pastTrips.length !== 1 ? "s" : ""}
-                </p>
-              </div>
-
+            <TabsContent value="past" className="space-y-6">
               {pastTrips.length > 0 ? (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {pastTrips.map((bid) => {
                     const trip = bid.trip;
                     if (!trip) return null;
+                    const review = tripReviews[trip.id];
 
                     return (
-                      <Card key={bid.id} className="p-6 border border-slate-200 bg-slate-50/50">
-                        <div className="space-y-4">
-                          <div className="flex items-start justify-between">
-                            <Badge variant="secondary" className="bg-slate-200 text-slate-700">
-                              <CheckCircle2 className="h-3 w-3 mr-1" />
-                              Completed
-                            </Badge>
-                            <div className="text-right">
-                              <div className="text-sm text-muted-foreground">Final Price</div>
-                              <div className="text-xl font-bold text-slate-700">${bid.bid_amount}</div>
-                            </div>
+                      <Card key={bid.id} className="p-6 opacity-75 hover:opacity-100 transition-opacity">
+                        <div className="flex justify-between items-start mb-4">
+                          <Badge variant="secondary" className="bg-slate-100 text-slate-600">
+                            Completed
+                          </Badge>
+                          <p className="font-bold text-xl text-slate-700">${bid.bid_amount}</p>
+                        </div>
+
+                        <div className="flex items-center gap-4 mb-4">
+                          <div className="flex-1">
+                            <p className="font-semibold text-slate-900">{trip.origin}</p>
+                            <ArrowRight className="h-4 w-4 text-slate-300 my-1" />
+                            <p className="font-semibold text-slate-900">{trip.destination}</p>
                           </div>
-
-                          <div className="border-t border-slate-200 pt-4">
-                            <div className="flex items-start gap-3 mb-4">
-                              <MapPin className="h-5 w-5 text-slate-400 mt-0.5 flex-shrink-0" />
-                              <div className="flex-1">
-                                <div className="font-semibold text-lg text-slate-900">{trip.origin}</div>
-                                <div className="text-sm text-slate-500 my-1">to</div>
-                                <div className="font-semibold text-lg text-slate-900">{trip.destination}</div>
-                              </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3 mb-4">
-                              <div className="flex items-center gap-2 text-sm text-slate-600">
-                                <Calendar className="h-4 w-4" />
-                                <span>{new Date(trip.departure_date).toLocaleDateString()}</span>
-                              </div>
-                              <div className="flex items-center gap-2 text-sm text-slate-600">
-                                <Users className="h-4 w-4" />
-                                <span>{trip.seats_needed} seats</span>
-                              </div>
-                            </div>
+                          <div className="text-right text-sm text-muted-foreground">
+                            <p>{new Date(trip.departure_date).toLocaleDateString()}</p>
+                            <p>{trip.seats_needed} seats</p>
                           </div>
                         </div>
+
+                        {/* Review Display */}
+                        {review && (
+                          <div className="mt-4 pt-4 border-t border-slate-100">
+                            <div className="bg-yellow-50/50 border border-yellow-100 rounded-xl p-4">
+                              <div className="flex items-center gap-2 mb-2">
+                                <div className="flex">
+                                  {[...Array(5)].map((_, i) => (
+                                    <Star
+                                      key={i}
+                                      className={`h-4 w-4 ${i < review.rating ? "text-yellow-400 fill-yellow-400" : "text-slate-200"}`}
+                                    />
+                                  ))}
+                                </div>
+                                <span className="font-bold text-slate-900">{review.rating}.0</span>
+                              </div>
+                              {review.comment && (
+                                <p className="text-slate-600 text-sm italic">"{review.comment}"</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </Card>
                     );
                   })}
                 </div>
               ) : (
-                <Card className="p-16 text-center border-dashed border-2">
-                  <div className="mx-auto w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6">
-                    <CheckCircle2 className="h-10 w-10 text-slate-300" />
+                <div className="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-slate-200">
+                  <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <Clock className="h-10 w-10 text-slate-300" />
                   </div>
-                  <h3 className="text-xl font-semibold mb-2">No past trips</h3>
+                  <h3 className="text-xl font-bold text-slate-900 mb-2">No trip history</h3>
                   <p className="text-muted-foreground max-w-md mx-auto">
-                    Completed trips will appear here.
+                    Your completed trips will appear here.
                   </p>
-                </Card>
+                </div>
               )}
             </TabsContent>
 
             {/* SETTINGS TAB */}
             <TabsContent value="settings">
-              <div className="mb-6">
-                <h2 className="text-2xl font-bold mb-2">Driver Settings</h2>
-                <p className="text-muted-foreground">
-                  Manage your vehicle details and profile
-                </p>
-              </div>
-
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <Card className="p-6 md:col-span-2">
+                <Card className="md:col-span-2 p-6">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="p-2 bg-primary/10 rounded-lg">
+                      <Car className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-slate-900">Vehicle Details</h2>
+                      <p className="text-sm text-muted-foreground">Manage your vehicle information</p>
+                    </div>
+                  </div>
+
                   <div className="space-y-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="vehicle-type">Vehicle Type</Label>
-                      <Select value={vehicleType} onValueChange={setVehicleType}>
-                        <SelectTrigger id="vehicle-type">
-                          <SelectValue placeholder="Select vehicle type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Car">Car</SelectItem>
-                          <SelectItem value="Van">Van</SelectItem>
-                          <SelectItem value="Bus">Bus</SelectItem>
-                          <SelectItem value="Cab">Cab</SelectItem>
-                        </SelectContent>
-                      </Select>
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="vehicle-type">Vehicle Type</Label>
+                        <Select value={vehicleType} onValueChange={setVehicleType}>
+                          <SelectTrigger id="vehicle-type" className="h-11">
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Car">Car</SelectItem>
+                            <SelectItem value="Van">Van</SelectItem>
+                            <SelectItem value="Bus">Bus</SelectItem>
+                            <SelectItem value="Cab">Cab</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="vehicle-model">Vehicle Model</Label>
+                        <Input
+                          id="vehicle-model"
+                          value={vehicleModel}
+                          onChange={(e) => setVehicleModel(e.target.value)}
+                          placeholder="e.g. Toyota Prius"
+                          className="h-11"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="license-plate">License Plate</Label>
+                        <Input
+                          id="license-plate"
+                          value={licensePlate}
+                          onChange={(e) => setLicensePlate(e.target.value)}
+                          placeholder="e.g. ABC-1234"
+                          className="h-11"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="vehicle-color">Vehicle Color</Label>
+                        <Input
+                          id="vehicle-color"
+                          value={vehicleColor}
+                          onChange={(e) => setVehicleColor(e.target.value)}
+                          placeholder="e.g. White"
+                          className="h-11"
+                        />
+                      </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="vehicle-model">Vehicle Model</Label>
-                      <Input
-                        id="vehicle-model"
-                        value={vehicleModel}
-                        onChange={(e) => setVehicleModel(e.target.value)}
-                        placeholder="e.g. Toyota Prius"
-                      />
+                    <div className="pt-4 flex justify-end">
+                      <Button
+                        onClick={handleSaveSettings}
+                        disabled={isSavingSettings || isSettingsLoading}
+                        className="w-full sm:w-auto min-w-[150px]"
+                      >
+                        {isSavingSettings ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          "Save Changes"
+                        )}
+                      </Button>
                     </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="license-plate">License Plate</Label>
-                      <Input
-                        id="license-plate"
-                        value={licensePlate}
-                        onChange={(e) => setLicensePlate(e.target.value)}
-                        placeholder="e.g. ABC-1234"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="vehicle-color">Vehicle Color</Label>
-                      <Input
-                        id="vehicle-color"
-                        value={vehicleColor}
-                        onChange={(e) => setVehicleColor(e.target.value)}
-                        placeholder="e.g. White"
-                      />
-                    </div>
-
-                    <Button
-                      onClick={handleSaveSettings}
-                      disabled={isSavingSettings || isSettingsLoading}
-                      className="w-full sm:w-auto"
-                    >
-                      {isSavingSettings ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Saving...
-                        </>
-                      ) : (
-                        "Save Changes"
-                      )}
-                    </Button>
                   </div>
                 </Card>
 
                 {/* Vehicle Preview Card */}
-                <Card className="p-6 flex flex-col items-center justify-center text-center bg-slate-50 border-dashed">
-                  <div className="w-32 h-32 bg-white rounded-full flex items-center justify-center shadow-sm mb-4">
+                <Card className="p-8 flex flex-col items-center justify-center text-center bg-gradient-to-b from-slate-50 to-white border-dashed">
+                  <div className="w-32 h-32 bg-white rounded-full flex items-center justify-center shadow-lg mb-6 relative">
+                    <div className="absolute inset-0 bg-primary/5 rounded-full animate-pulse"></div>
                     {(() => {
                       const Icon = getVehicleIcon(vehicleType);
-                      return <Icon className="h-16 w-16 text-primary" />;
+                      return <Icon className="h-14 w-14 text-primary relative z-10" />;
                     })()}
                   </div>
-                  <h3 className="font-semibold text-lg">{vehicleType || "Select Type"}</h3>
-                  <p className="text-sm text-muted-foreground mt-1">
+                  <h3 className="font-bold text-xl text-slate-900">{vehicleType || "Select Type"}</h3>
+                  <p className="text-muted-foreground mt-1 font-medium">
                     {vehicleModel || "Vehicle Model"}
                   </p>
-                  <Badge variant="outline" className="mt-3">
+                  <Badge variant="outline" className="mt-4 px-4 py-1 text-sm border-slate-300 bg-white">
                     {licensePlate || "NO PLATE"}
                   </Badge>
                 </Card>

@@ -39,11 +39,13 @@ export interface Trip {
   departure_date: string;
   seats_needed: number;
   max_price: number;
-  status: "open" | "booked" | "cancelled";
+  vehicle_type?: string;
+  status: "open" | "booked" | "cancelled" | "completed";
   description: string | null;
   created_at: string;
   updated_at: string;
   traveler?: Profile;
+  profiles?: Profile;
   bids?: DriverBid[];
   booking?: Booking | null;
 }
@@ -102,6 +104,7 @@ export interface CreateTripPayload {
   departure_date: string;
   seats_needed: number;
   max_price: number;
+  vehicle_type?: string;
   description?: string;
 }
 
@@ -118,8 +121,6 @@ export interface AcceptBidPayload {
   bid_id: string;
   pickup_time: string;
 }
-
-// Add to client/src/lib/types.ts
 
 export interface DriverNotification {
   id: string;
@@ -138,4 +139,20 @@ export interface DriverNotification {
   status: "unread" | "read" | "archived";
   created_at: string;
   read_at: string | null;
+}
+
+export interface DriverDetails {
+  id: string;
+  license_number: string | null;
+  vehicle_type: string | null;
+  vehicle_model: string | null;
+  vehicle_color: string | null;
+  license_plate: string | null;
+  insurance_expires_at: string | null;
+  total_trips: number;
+  average_rating: number;
+  is_verified: boolean;
+  bio: string | null;
+  created_at: string;
+  updated_at: string;
 }

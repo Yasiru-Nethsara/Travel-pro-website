@@ -51,7 +51,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Get all verified drivers
-    const { data: drivers, error: driversError } = await supabase
+    let driverQuery = supabase
       .from("driver_profiles")
       .select(`
         id,
@@ -60,6 +60,13 @@ Deno.serve(async (req: Request) => {
         profiles:id(full_name, email)
       `)
       .eq("is_verified", true);
+
+    // Filter by vehicle type if specified and not "Any"
+    if (trip.vehicle_type && trip.vehicle_type !== "Any") {
+      driverQuery = driverQuery.eq("vehicle_type", trip.vehicle_type);
+    }
+
+    const { data: drivers, error: driversError } = await driverQuery;
 
     if (driversError) {
       throw new Error("Failed to fetch drivers");

@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import TripSummaryCard from "@/components/TripSummaryCard";
-import { Plus, Loader2, MapPin, Calendar, Users, DollarSign, Star, Check, X } from "lucide-react";
+import { Plus, Loader2, MapPin, Calendar, Users, DollarSign, Check, X, Trash2, CheckCircle2 } from "lucide-react";
 import { Link } from "wouter";
-import { getMyTrips, getBidsForTrip, acceptBid, rejectBid } from "@/lib/api";
+import { getMyTrips, getBidsForTrip, acceptBid, rejectBid, deleteTrip, completeTrip } from "@/lib/api";
 import type { Trip, DriverBid } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 
@@ -31,7 +31,7 @@ export default function TravelerDashboard() {
       setError(null);
       const data = await getMyTrips();
       setTrips(data);
-      
+
       // Load bids for each open trip
       const bidsMap: Record<string, DriverBid[]> = {};
       for (const trip of data.filter(t => t.status === "open")) {
@@ -52,19 +52,19 @@ export default function TravelerDashboard() {
     }
   };
 
-  const handleAcceptBid = async (bidId: string, tripId: string) => {
+  const handleAcceptBid = async (bidId: string) => {
     try {
       setAcceptingBid(bidId);
       await acceptBid({
         bid_id: bidId,
         pickup_time: new Date().toISOString(),
       });
-      
+
       toast({
         title: "Driver Selected!",
         description: "The driver has been notified and your trip is confirmed.",
       });
-      
+
       // Reload trips to reflect changes
       await loadTrips();
     } catch (err) {
@@ -95,11 +95,49 @@ export default function TravelerDashboard() {
     }
   };
 
+  const handleDeleteTrip = async (tripId: string) => {
+    if (!confirm("Are you sure you want to delete this trip?")) return;
+
+    try {
+      await deleteTrip(tripId);
+      toast({
+        title: "Trip Deleted",
+        description: "Your trip has been successfully removed.",
+      });
+      await loadTrips();
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Failed to delete trip",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCompleteTrip = async (tripId: string) => {
+    if (!confirm("Are you sure you want to mark this trip as complete?")) return;
+
+    try {
+      await completeTrip(tripId);
+      toast({
+        title: "Trip Completed",
+        description: "Your trip has been marked as complete.",
+      });
+      await loadTrips();
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Failed to complete trip",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Filter trips by status
   const activeTrips = trips.filter(
     (trip) => trip.status === "open" || trip.status === "booked"
   );
-  const pastTrips = trips.filter((trip) => trip.status === "cancelled");
+  const pastTrips = trips.filter((trip) => trip.status === "cancelled" || trip.status === "completed");
 
   // Count total pending bids
   const totalPendingBids = Object.values(tripBids).reduce(
@@ -186,7 +224,7 @@ export default function TravelerDashboard() {
                               <div className="font-semibold">{trip.destination}</div>
                             </div>
                           </div>
-                          
+
                           <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                             <div className="flex items-center gap-1">
                               <Calendar className="h-4 w-4" />
@@ -203,10 +241,32 @@ export default function TravelerDashboard() {
                           </div>
                         </div>
 
-                        <div className="text-right">
+                        <div className="text-right flex flex-col items-end gap-2">
                           <Badge variant={trip.status === "booked" ? "default" : "secondary"}>
                             {trip.status === "booked" ? "Booked" : "Open"}
                           </Badge>
+                          {trip.status === "open" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => handleDeleteTrip(trip.id)}
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Delete
+                            </Button>
+                          )}
+                          {trip.status === "booked" && (
+                            <Button
+                              variant="default"
+                              size="sm"
+                              className="bg-green-600 hover:bg-green-700 text-white"
+                              onClick={() => handleCompleteTrip(trip.id)}
+                            >
+                              <CheckCircle2 className="h-4 w-4 mr-1" />
+                              Complete Trip
+                            </Button>
+                          )}
                         </div>
                       </div>
 
@@ -262,7 +322,7 @@ export default function TravelerDashboard() {
                                     )}
                                   </div>
                                 </div>
-                                
+
                                 <div className="flex items-center gap-4">
                                   <div className="text-right">
                                     <p className="text-2xl font-bold">${bid.bid_amount}</p>
@@ -282,7 +342,7 @@ export default function TravelerDashboard() {
                                     </Button>
                                     <Button
                                       size="sm"
-                                      onClick={() => handleAcceptBid(bid.id, trip.id)}
+                                      onClick={() => handleAcceptBid(bid.id)}
                                       disabled={acceptingBid === bid.id}
                                     >
                                       {acceptingBid === bid.id ? (

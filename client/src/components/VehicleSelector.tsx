@@ -8,9 +8,10 @@ interface VehicleSelectorProps {
 }
 
 const vehicles = [
-  { id: "car", name: "Car", icon: Car, capacity: "1-4 seats" },
-  { id: "van", name: "Van", icon: SiMercedes, capacity: "5-8 seats" },
-  { id: "bus", name: "Bus", icon: Bus, capacity: "9+ seats" },
+  { id: "Car", name: "Car", icon: Car, capacity: "1-4 seats" },
+  { id: "Van", name: "Van", icon: SiMercedes, capacity: "5-8 seats" },
+  { id: "Bus", name: "Bus", icon: Bus, capacity: "9+ seats" },
+  { id: "Cab", name: "Cab", icon: Car, capacity: "1-4 seats" },
 ];
 
 export default function VehicleSelector({ selectedVehicle, onSelect }: VehicleSelectorProps) {
@@ -24,13 +25,15 @@ export default function VehicleSelector({ selectedVehicle, onSelect }: VehicleSe
           <Card
             key={vehicle.id}
             className={`
-              p-6 cursor-pointer transition-all hover-elevate active-elevate-2
+              cursor-pointer transition-all hover-elevate active-elevate-2
               ${isSelected ? "border-primary border-2" : ""}
             `}
-            onClick={() => onSelect(vehicle.id)}
             data-testid={`vehicle-option-${vehicle.id}`}
           >
-            <div className="flex flex-col items-center gap-4 text-center">
+            <div
+              className="p-6 flex flex-col items-center gap-4 text-center w-full h-full"
+              onClick={() => onSelect(vehicle.id)}
+            >
               <div className={`p-4 rounded-lg ${isSelected ? "bg-primary/10" : "bg-muted"}`}>
                 <Icon className={`h-8 w-8 ${isSelected ? "text-primary" : "text-foreground"}`} />
               </div>

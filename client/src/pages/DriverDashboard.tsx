@@ -217,6 +217,13 @@ export default function DriverDashboard() {
     !vehicleType || !trip.vehicle_type || trip.vehicle_type === vehicleType
   );
 
+  // Calculate driver rating and total reviews
+  const allReviews = Object.values(tripReviews);
+  const totalReviews = allReviews.length;
+  const driverRating = totalReviews > 0
+    ? allReviews.reduce((sum: number, review: any) => sum + review.rating, 0) / totalReviews
+    : 0;
+
   const getVehicleIcon = (type: string) => {
     switch (type) {
       case "Bus": return Bus;
@@ -227,6 +234,16 @@ export default function DriverDashboard() {
   };
 
   const stats = [
+    {
+      label: "Your Rating",
+      value: driverRating ? `${driverRating.toFixed(1)} ⭐` : "No ratings yet",
+      subtitle: totalReviews > 0 ? `${totalReviews} review${totalReviews !== 1 ? 's' : ''}` : undefined,
+      icon: Star,
+      color: "text-yellow-600",
+      bg: "bg-yellow-100",
+      clickable: true,
+      onClick: () => setActiveTab("past")
+    },
     {
       label: "Available Trips",
       value: filteredRequests.length.toString(),
@@ -357,6 +374,9 @@ export default function DriverDashboard() {
                     <div>
                       <p className="text-3xl font-bold text-slate-900 mb-1">{stat.value}</p>
                       <p className="text-sm font-medium text-muted-foreground">{stat.label}</p>
+                      {stat.subtitle && (
+                        <p className="text-xs text-muted-foreground mt-0.5">{stat.subtitle}</p>
+                      )}
                     </div>
                   </div>
                   <div className={`h-1 w-full ${stat.bg.replace('bg-', 'bg-gradient-to-r from-transparent via-')}`} />

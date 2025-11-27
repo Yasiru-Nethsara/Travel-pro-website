@@ -1,30 +1,57 @@
 import { useState, useEffect } from "react";
-import Navigation from "@/components/Navigation";
-import Footer from "@/components/Footer";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getMyTrips, getBidsForTrip, acceptBid, rejectBid, completeTrip, deleteTrip } from "@/lib/api";
+import type { Trip, DriverBid } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Plus, Loader2, MapPin, Calendar, Users, DollarSign, Check, X,
-  Trash2, CheckCircle2, Map, Clock, Shield, ChevronRight, Car, Star
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
+import {
+  MapPin,
+  Calendar,
+  Users,
+  DollarSign,
+  Clock,
+  CheckCircle2,
+  Car,
+  Star,
+  Shield,
+  Map,
+  Plus,
+  Loader2,
+  ChevronRight,
+  Trash2,
+  Info,
+  User
 } from "lucide-react";
 import { Link } from "wouter";
-import { getMyTrips, getBidsForTrip, acceptBid, rejectBid, deleteTrip, completeTrip } from "@/lib/api";
-import type { Trip, DriverBid } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
+import Navigation from "@/components/Navigation";
+import Footer from "@/components/Footer";
 import RateDriverDialog from "@/components/RateDriverDialog";
 
 export default function TravelerDashboard() {
-  const [activeTab, setActiveTab] = useState("active");
+  const { toast } = useToast();
   const [trips, setTrips] = useState<Trip[]>([]);
-  const [tripBids, setTripBids] = useState<Record<string, DriverBid[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("active");
+  const [tripBids, setTripBids] = useState<Record<string, DriverBid[]>>({});
   const [acceptingBid, setAcceptingBid] = useState<string | null>(null);
-  const { toast } = useToast();
-
-  // Rating Dialog State
+  const [selectedBid, setSelectedBid] = useState<DriverBid | null>(null);
   const [ratingDialog, setRatingDialog] = useState<{
     isOpen: boolean;
     tripId: string;
@@ -41,48 +68,49 @@ export default function TravelerDashboard() {
     loadTrips();
   }, []);
 
-  const loadTrips = async () => {
+  async function loadTrips() {
     try {
       setLoading(true);
-      setError(null);
       const data = await getMyTrips();
       setTrips(data);
 
-      // Load bids for each open or booked trip
-      const bidsMap: Record<string, DriverBid[]> = {};
-      for (const trip of data.filter(t => t.status === "open" || t.status === "booked")) {
-        try {
-          const bids = await getBidsForTrip(trip.id);
-          bidsMap[trip.id] = bids;
-        } catch (e) {
-          console.error(`Failed to load bids for trip ${trip.id}:`, e);
-          bidsMap[trip.id] = [];
-        }
-      }
-      setTripBids(bidsMap);
+      // Fetch bids for active trips
+      const activeTripsList = data.filter(t => t.status === "open" || t.status === "booked");
+      const bidsData: Record<string, DriverBid[]> = {};
+
+      await Promise.all(
+        activeTripsList.map(async (trip) => {
+          try {
+            const bids = await getBidsForTrip(trip.id);
+            bidsData[trip.id] = bids;
+          } catch (err) {
+            console.error(`Failed to fetch bids for trip ${trip.id}`, err);
+          }
+        })
+      );
+
+      setTripBids(bidsData);
     } catch (err) {
-      console.error("Failed to load trips:", err);
       setError(err instanceof Error ? err.message : "Failed to load trips");
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const handleAcceptBid = async (bidId: string) => {
+  async function handleAcceptBid(bidId: string) {
     try {
       setAcceptingBid(bidId);
-      await acceptBid({
-        bid_id: bidId,
-        pickup_time: new Date().toISOString(),
-      });
+      // Find the bid to get pickup time (default to now + 1h if not specified in bid)
+      const pickupTime = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+      await acceptBid({ bid_id: bidId, pickup_time: pickupTime });
 
       toast({
-        title: "Driver Selected!",
-        description: "The driver has been notified and your trip is confirmed.",
+        title: "Bid Accepted!",
+        description: "Your trip has been confirmed. The driver has been notified.",
       });
 
-      // Reload trips to reflect changes
-      await loadTrips();
+      loadTrips();
     } catch (err) {
       toast({
         title: "Error",
@@ -92,184 +120,139 @@ export default function TravelerDashboard() {
     } finally {
       setAcceptingBid(null);
     }
-  };
+  }
 
-  const handleRejectBid = async (bidId: string) => {
+  async function handleRejectBid(bidId: string) {
     try {
       await rejectBid(bidId);
       toast({
-        title: "Bid Rejected",
-        description: "The driver has been notified.",
+        title: "Bid Declined",
+        description: "The bid has been removed.",
       });
-      await loadTrips();
+      loadTrips();
     } catch (err) {
       toast({
         title: "Error",
-        description: err instanceof Error ? err.message : "Failed to reject bid",
+        description: "Failed to reject bid",
         variant: "destructive",
       });
     }
-  };
+  }
 
-  const handleDeleteTrip = async (tripId: string) => {
-    if (!confirm("Are you sure you want to delete this trip?")) return;
+  async function handleCompleteTrip(tripId: string) {
+    try {
+      await completeTrip(tripId);
+
+      const bids = tripBids[tripId] || [];
+      const acceptedBid = bids.find(b => b.status === "accepted");
+
+      if (acceptedBid && acceptedBid.driver) {
+        setRatingDialog({
+          isOpen: true,
+          tripId,
+          driverId: acceptedBid.driver_id,
+          driverName: acceptedBid.driver.full_name,
+        });
+      } else {
+        loadTrips();
+      }
+
+      toast({
+        title: "Trip Completed",
+        description: "Hope you had a safe journey!",
+      });
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Failed to complete trip",
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function handleDeleteTrip(tripId: string) {
+    if (!confirm("Are you sure you want to cancel this trip? This action cannot be undone.")) return;
 
     try {
       await deleteTrip(tripId);
       toast({
-        title: "Trip Deleted",
-        description: "Your trip has been successfully removed.",
+        title: "Trip Cancelled",
+        description: "Your trip request has been deleted.",
       });
-      await loadTrips();
+      loadTrips();
     } catch (err) {
       toast({
         title: "Error",
-        description: err instanceof Error ? err.message : "Failed to delete trip",
+        description: "Failed to delete trip",
         variant: "destructive",
       });
     }
-  };
-
-  const handleCompleteTrip = async (tripId: string) => {
-    // Find the accepted bid to get driver details
-    const bids = tripBids[tripId] || [];
-    const acceptedBid = bids.find(b => b.status === "accepted");
-
-    if (acceptedBid) {
-      // Open rating dialog
-      setRatingDialog({
-        isOpen: true,
-        tripId,
-        driverId: acceptedBid.driver_id,
-        driverName: acceptedBid.driver?.full_name || "Driver",
-      });
-    } else {
-      // Fallback if no driver found (shouldn't happen for booked trips)
-      if (!confirm("Are you sure you want to mark this trip as complete?")) return;
-      try {
-        await completeTrip(tripId);
-        toast({
-          title: "Trip Completed",
-          description: "Your trip has been marked as complete.",
-        });
-        await loadTrips();
-      } catch (err) {
-        toast({
-          title: "Error",
-          description: err instanceof Error ? err.message : "Failed to complete trip",
-          variant: "destructive",
-        });
-      }
-    }
-  };
-
-  // Filter trips by status
-  const activeTrips = trips.filter(
-    (trip) => trip.status === "open" || trip.status === "booked"
-  );
-  const pastTrips = trips.filter((trip) => trip.status === "cancelled" || trip.status === "completed");
-
-  // Count total pending bids
-  const totalPendingBids = Object.values(tripBids).reduce(
-    (sum, bids) => sum + bids.filter(b => b.status === "pending").length,
-    0
-  );
-
-  const stats = [
-    {
-      label: "Active Trips",
-      value: activeTrips.length.toString(),
-      icon: Map,
-      color: "text-blue-600",
-      bg: "bg-blue-100",
-      clickable: true,
-      onClick: () => setActiveTab("active")
-    },
-    {
-      label: "New Bids",
-      value: totalPendingBids.toString(),
-      icon: DollarSign,
-      color: "text-green-600",
-      bg: "bg-green-100",
-      clickable: true,
-      onClick: () => setActiveTab("active")
-    },
-    {
-      label: "Completed",
-      value: pastTrips.length.toString(),
-      icon: CheckCircle2,
-      color: "text-purple-600",
-      bg: "bg-purple-100",
-      clickable: true,
-      onClick: () => setActiveTab("past")
-    },
-  ];
+  }
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col bg-slate-50">
-        <Navigation />
-        <main className="flex-1 pt-24 pb-16 flex items-center justify-center">
-          <div className="text-center space-y-4">
-            <div className="relative w-20 h-20 mx-auto">
-              <div className="absolute inset-0 border-4 border-slate-200 rounded-full"></div>
-              <div className="absolute inset-0 border-4 border-primary rounded-full border-t-transparent animate-spin"></div>
-              <MapPin className="absolute inset-0 m-auto h-8 w-8 text-primary" />
-            </div>
-            <p className="text-muted-foreground font-medium animate-pulse">Loading your journeys...</p>
-          </div>
-        </main>
-        <Footer />
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-slate-600">Loading your trips...</p>
+        </div>
       </div>
     );
   }
 
+  const activeTrips = trips.filter(t => t.status === "open" || t.status === "booked");
+  const pastTrips = trips.filter(t => t.status === "completed" || t.status === "cancelled");
+
+  const stats = [
+    {
+      label: "Active Trips",
+      value: activeTrips.length,
+      icon: Map,
+      color: "text-blue-600",
+      bg: "bg-blue-100",
+      clickable: true
+    },
+    {
+      label: "Total Spent",
+      value: `$${pastTrips.reduce((acc, t) => acc + (t.booking?.final_price || 0), 0)}`,
+      icon: DollarSign,
+      color: "text-green-600",
+      bg: "bg-green-100",
+      clickable: false
+    },
+    {
+      label: "Completed",
+      value: pastTrips.filter(t => t.status === "completed").length,
+      icon: CheckCircle2,
+      color: "text-purple-600",
+      bg: "bg-purple-100",
+      clickable: true
+    }
+  ];
+
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       <Navigation />
-
-      {/* Hero Section */}
-      <div className="bg-slate-900 text-white pt-28 pb-32 px-4 lg:px-8 relative overflow-hidden">
-        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center opacity-10"></div>
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-slate-900/90"></div>
-
-        <div className="max-w-7xl mx-auto relative z-10">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+      <main className="flex-grow container mx-auto px-4 py-8 pt-24">
+        <div className="max-w-5xl mx-auto">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
             <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Badge className="bg-primary hover:bg-primary text-white border-none px-3 py-1">
-                  Traveler Portal
-                </Badge>
-              </div>
-              <h1 className="text-3xl md:text-4xl font-bold mb-2">Your Journeys</h1>
-              <p className="text-slate-300 max-w-xl">
-                Manage your trips, review driver bids, and track your travel history.
-              </p>
+              <h1 className="text-3xl font-bold text-slate-900">My Trips</h1>
+              <p className="text-slate-600 mt-1">Manage your travel requests and bookings</p>
             </div>
-
-            <Button asChild className="bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 h-12 px-6 text-lg">
+            <Button asChild size="lg" className="bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all hover:scale-105">
               <Link href="/book-trip">
                 <Plus className="h-5 w-5 mr-2" />
-                Plan New Trip
+                New Trip Request
               </Link>
             </Button>
           </div>
-        </div>
-      </div>
 
-      <main className="flex-1 -mt-20 relative z-20 pb-16 px-4 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-
-          {/* Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            {stats.map((stat) => {
+            {stats.map((stat, index) => {
               const Icon = stat.icon;
               return (
-                <Card
-                  key={stat.label}
-                  className={`border-none shadow-lg overflow-hidden relative group ${stat.clickable ? 'cursor-pointer hover:-translate-y-1 transition-transform duration-300' : ''}`}
-                  onClick={stat.onClick}
-                >
+                <Card key={index} className="border-none shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden group cursor-pointer">
                   <div className="p-5">
                     <div className="flex justify-between items-start mb-4">
                       <div className={`p-3 rounded-xl ${stat.bg}`}>
@@ -471,7 +454,8 @@ export default function TravelerDashboard() {
                                       {pendingBids.map((bid) => (
                                         <div
                                           key={bid.id}
-                                          className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-shadow"
+                                          className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-shadow cursor-pointer group"
+                                          onClick={() => setSelectedBid(bid)}
                                         >
                                           <div className="flex justify-between items-start mb-3">
                                             <div className="flex items-center gap-3">
@@ -479,10 +463,20 @@ export default function TravelerDashboard() {
                                                 {(bid.driver?.full_name || "D")[0]}
                                               </div>
                                               <div>
-                                                <p className="font-semibold text-slate-900">{bid.driver?.full_name}</p>
+                                                <p className="font-semibold text-slate-900 group-hover:text-primary transition-colors">
+                                                  {bid.driver?.full_name}
+                                                </p>
                                                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                                  <Star className="h-3 w-3 text-yellow-400 fill-yellow-400" />
-                                                  <span>4.8</span>
+                                                  {bid.driver?.age && (
+                                                    <>
+                                                      <span>{bid.driver.age} years</span>
+                                                      <span>•</span>
+                                                    </>
+                                                  )}
+                                                  <div className="flex items-center text-yellow-500">
+                                                    <Star className="h-3 w-3 fill-yellow-500 mr-0.5" />
+                                                    <span className="font-medium">{bid.driver?.driver_stats?.[0]?.average_rating?.toFixed(1) || "New"}</span>
+                                                  </div>
                                                   <span>•</span>
                                                   <span>{bid.vehicle_type}</span>
                                                 </div>
@@ -498,31 +492,31 @@ export default function TravelerDashboard() {
                                             </div>
                                           </div>
 
-                                          {bid.notes && (
-                                            <p className="text-sm text-slate-600 mb-3 bg-slate-50 p-2 rounded-lg">
-                                              "{bid.notes}"
-                                            </p>
-                                          )}
-
-                                          <div className="flex gap-2">
-                                            <Button
-                                              variant="outline"
-                                              className="flex-1 h-9 text-xs border-slate-200 hover:bg-slate-50 hover:text-red-600 hover:border-red-200"
-                                              onClick={() => handleRejectBid(bid.id)}
-                                            >
-                                              Decline
-                                            </Button>
-                                            <Button
-                                              className="flex-1 h-9 text-xs bg-slate-900 hover:bg-slate-800"
-                                              onClick={() => handleAcceptBid(bid.id)}
-                                              disabled={acceptingBid === bid.id}
-                                            >
-                                              {acceptingBid === bid.id ? (
-                                                <Loader2 className="h-3 w-3 animate-spin" />
-                                              ) : (
-                                                "Accept Offer"
-                                              )}
-                                            </Button>
+                                          <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
+                                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                              <Info className="h-3 w-3" />
+                                              Click to view details
+                                            </span>
+                                            <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                                              <Button
+                                                variant="outline"
+                                                className="h-8 text-xs border-slate-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200"
+                                                onClick={() => handleRejectBid(bid.id)}
+                                              >
+                                                Decline
+                                              </Button>
+                                              <Button
+                                                className="h-8 text-xs bg-slate-900 hover:bg-slate-800"
+                                                onClick={() => handleAcceptBid(bid.id)}
+                                                disabled={acceptingBid === bid.id}
+                                              >
+                                                {acceptingBid === bid.id ? (
+                                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                                ) : (
+                                                  "Accept"
+                                                )}
+                                              </Button>
+                                            </div>
                                           </div>
                                         </div>
                                       ))}
@@ -608,8 +602,8 @@ export default function TravelerDashboard() {
               )}
             </TabsContent>
           </Tabs>
-        </div>
-      </main>
+        </div >
+      </main >
       <Footer />
 
       <RateDriverDialog
@@ -623,6 +617,135 @@ export default function TravelerDashboard() {
           setRatingDialog(prev => ({ ...prev, isOpen: false }));
         }}
       />
-    </div>
+
+      {/* Driver Details Dialog */}
+      <Dialog open={!!selectedBid} onOpenChange={(open) => !open && setSelectedBid(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Driver & Vehicle Details</DialogTitle>
+            <DialogDescription>Review the driver's profile and vehicle information</DialogDescription>
+          </DialogHeader>
+
+          {selectedBid && (
+            <div className="space-y-6">
+              {/* Driver Info */}
+              <div className="flex items-start gap-4 p-4 bg-slate-50 rounded-xl">
+                <div className="w-16 h-16 rounded-full bg-white border-2 border-slate-200 flex items-center justify-center text-2xl font-bold text-slate-600">
+                  {(selectedBid.driver?.full_name || "D")[0]}
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">{selectedBid.driver?.full_name}</h3>
+                  <div className="flex flex-wrap gap-3 mt-1 text-sm text-muted-foreground">
+                    {selectedBid.driver?.age && (
+                      <span className="flex items-center gap-1">
+                        <User className="h-3 w-3" />
+                        {selectedBid.driver.age} years old
+                      </span>
+                    )}
+                    <span className="flex items-center gap-1">
+                      <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" />
+                      {selectedBid.driver?.driver_stats?.[0]?.average_rating?.toFixed(1) || "New"} Rating
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Car className="h-3 w-3" />
+                      {selectedBid.driver?.driver_stats?.[0]?.total_trips || 0} Trips
+                    </span>
+                  </div>
+                </div>
+                <div className="ml-auto text-right">
+                  <p className="text-sm text-muted-foreground">Bid Price</p>
+                  <p className="text-2xl font-bold text-primary">${selectedBid.bid_amount}</p>
+                </div>
+              </div>
+
+              {/* Vehicle Photos */}
+              {selectedBid.driver?.driver_profiles?.[0]?.vehicle_photos && selectedBid.driver.driver_profiles[0].vehicle_photos.length > 0 ? (
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-slate-900">Vehicle Photos</h4>
+                  <Carousel className="w-full max-w-md mx-auto">
+                    <CarouselContent>
+                      {selectedBid.driver.driver_profiles[0].vehicle_photos.map((photo, index) => (
+                        <CarouselItem key={index}>
+                          <div className="aspect-video relative rounded-xl overflow-hidden bg-slate-100">
+                            <img src={photo} alt={`Vehicle ${index + 1}`} className="w-full h-full object-cover" />
+                          </div>
+                        </CarouselItem>
+                      ))}
+                    </CarouselContent>
+                    <CarouselPrevious />
+                    <CarouselNext />
+                  </Carousel>
+                </div>
+              ) : selectedBid.driver?.driver_profiles?.[0]?.vehicle_photo_url ? (
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-slate-900">Vehicle Photo</h4>
+                  <div className="aspect-video relative rounded-xl overflow-hidden bg-slate-100">
+                    <img src={selectedBid.driver.driver_profiles[0].vehicle_photo_url} alt="Vehicle" className="w-full h-full object-cover" />
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Vehicle Details */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 border border-slate-200 rounded-lg">
+                  <p className="text-xs text-muted-foreground uppercase">Vehicle Type</p>
+                  <p className="font-medium">{selectedBid.vehicle_type}</p>
+                </div>
+                <div className="p-3 border border-slate-200 rounded-lg">
+                  <p className="text-xs text-muted-foreground uppercase">License Plate</p>
+                  <p className="font-medium">{selectedBid.license_plate}</p>
+                </div>
+                {selectedBid.vehicle_color && (
+                  <div className="p-3 border border-slate-200 rounded-lg">
+                    <p className="text-xs text-muted-foreground uppercase">Color</p>
+                    <p className="font-medium">{selectedBid.vehicle_color}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Description & Notes */}
+              <div className="space-y-4">
+                {selectedBid.driver?.driver_profiles?.[0]?.vehicle_description && (
+                  <div>
+                    <h4 className="font-semibold text-slate-900 mb-1">Vehicle Description</h4>
+                    <p className="text-sm text-slate-600 bg-slate-50 p-3 rounded-lg">
+                      {selectedBid.driver.driver_profiles[0].vehicle_description}
+                    </p>
+                  </div>
+                )}
+
+                {selectedBid.notes && (
+                  <div>
+                    <h4 className="font-semibold text-slate-900 mb-1">Bid Notes</h4>
+                    <p className="text-sm text-slate-600 bg-slate-50 p-3 rounded-lg italic">
+                      "{selectedBid.notes}"
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-slate-100">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => handleRejectBid(selectedBid.id)}
+                >
+                  Decline Bid
+                </Button>
+                <Button
+                  className="flex-1 bg-slate-900 hover:bg-slate-800"
+                  onClick={() => {
+                    handleAcceptBid(selectedBid.id);
+                    setSelectedBid(null);
+                  }}
+                >
+                  Accept Offer
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div >
   );
 }

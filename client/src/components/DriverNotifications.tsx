@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Bell, MapPin, Calendar, Users, DollarSign, Clock, Archive } from "lucide-react";
+import { Bell, Calendar, Users, DollarSign, Clock, Archive } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { DriverNotification } from "@/lib/types";
 
@@ -148,9 +148,8 @@ export default function DriverNotifications() {
             return (
               <Card
                 key={notification.id}
-                className={`p-4 transition-all ${
-                  isUnread ? "border-primary/50 bg-primary/5" : ""
-                }`}
+                className={`p-4 transition-all ${isUnread ? "border-primary/50 bg-primary/5" : ""
+                  }`}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
@@ -188,7 +187,7 @@ export default function DriverNotifications() {
                           {Math.floor(
                             (Date.now() -
                               new Date(notification.created_at).getTime()) /
-                              (1000 * 60)
+                            (1000 * 60)
                           )}
                           m ago
                         </span>

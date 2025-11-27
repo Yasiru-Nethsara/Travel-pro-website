@@ -6,12 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import {
-  DollarSign, MapPin, Loader2, Car, Calendar, Users, Wind, Check,
-  Phone, User, ArrowRight, Bus, Truck, CheckCircle2, Star, Shield,
-  Clock, Map, ChevronRight, Settings
+  MapPin, Loader2, Car, Calendar, Users, Wind, Check,
+  Phone, User, ArrowRight, CheckCircle2, Star, Shield,
+  ChevronRight, X, Upload
 } from "lucide-react";
-import { getTrips, submitBid, getMyBids, getDriverDetails, updateDriverDetails, completeTrip, getTripReview } from "@/lib/api";
+import { getTrips, submitBid, getMyBids, getDriverDetails, updateDriverDetails, completeTrip, getTripReview, uploadVehiclePhoto } from "@/lib/api";
 import type { Trip, DriverBid } from "@/lib/types";
 import {
   Select,
@@ -39,7 +40,9 @@ export default function DriverDashboard() {
   const [vehicleModel, setVehicleModel] = useState("");
   const [licensePlate, setLicensePlate] = useState("");
   const [vehicleColor, setVehicleColor] = useState("");
-  const [isSettingsLoading, setIsSettingsLoading] = useState(false);
+  const [vehicleDescription, setVehicleDescription] = useState("");
+  const [vehiclePhotos, setVehiclePhotos] = useState<string[]>([]);
+  const [newPhotos, setNewPhotos] = useState<{ file: File; preview: string }[]>([]);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   const { toast } = useToast();
@@ -97,35 +100,79 @@ export default function DriverDashboard() {
 
   const loadDriverSettings = async () => {
     try {
-      setIsSettingsLoading(true);
       const data = await getDriverDetails();
       if (data) {
         setVehicleType(data.vehicle_type || "");
         setVehicleModel(data.vehicle_model || "");
         setLicensePlate(data.license_plate || "");
         setVehicleColor(data.vehicle_color || "");
+        setVehicleDescription(data.vehicle_description || "");
+        // Handle legacy single photo url if array is empty
+        const photos = data.vehicle_photos && data.vehicle_photos.length > 0
+          ? data.vehicle_photos
+          : data.vehicle_photo_url
+            ? [data.vehicle_photo_url]
+            : [];
+        setVehiclePhotos(photos);
       }
     } catch (err) {
       console.error("Failed to load driver settings:", err);
     } finally {
-      setIsSettingsLoading(false);
+      // Loading finished
     }
+  };
+
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files) {
+      Array.from(files).forEach(file => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setNewPhotos(prev => [...prev, { file, preview: reader.result as string }]);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+  };
+
+  const removeNewPhoto = (index: number) => {
+    setNewPhotos(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const removeExistingPhoto = (index: number) => {
+    setVehiclePhotos(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSaveSettings = async () => {
     try {
       setIsSavingSettings(true);
+
+      // Upload new photos
+      const uploadedUrls = await Promise.all(
+        newPhotos.map(p => uploadVehiclePhoto(p.file))
+      );
+
+      const allPhotos = [...vehiclePhotos, ...uploadedUrls];
+
       await updateDriverDetails({
         vehicle_type: vehicleType,
         vehicle_model: vehicleModel,
         license_plate: licensePlate,
         vehicle_color: vehicleColor,
+        vehicle_description: vehicleDescription,
+        vehicle_photos: allPhotos,
+        // Keep the first photo as the main legacy URL for backward compatibility if needed
+        vehicle_photo_url: allPhotos.length > 0 ? allPhotos[0] : undefined,
       });
 
+      setVehiclePhotos(allPhotos);
+      setNewPhotos([]);
+
       toast({
-        title: "Settings Saved",
-        description: "Your vehicle details have been updated.",
+        title: "Profile Saved",
+        description: "Your vehicle profile has been updated.",
       });
+
     } catch (err) {
       toast({
         title: "Error",
@@ -224,15 +271,6 @@ export default function DriverDashboard() {
     ? allReviews.reduce((sum: number, review: any) => sum + review.rating, 0) / totalReviews
     : 0;
 
-  const getVehicleIcon = (type: string) => {
-    switch (type) {
-      case "Bus": return Bus;
-      case "Van": return Truck; // Using Truck as proxy for Van if needed, or just Car
-      case "Cab": return Car;
-      default: return Car;
-    }
-  };
-
   const stats = [
     {
       label: "Your Rating",
@@ -247,7 +285,7 @@ export default function DriverDashboard() {
     {
       label: "Available Trips",
       value: filteredRequests.length.toString(),
-      icon: Map,
+      icon: MapPin,
       color: "text-blue-600",
       bg: "bg-blue-100",
       clickable: false
@@ -255,7 +293,7 @@ export default function DriverDashboard() {
     {
       label: "Pending Bids",
       value: pendingBids.length.toString(),
-      icon: Clock,
+      icon: Loader2,
       color: "text-orange-600",
       bg: "bg-orange-100",
       clickable: false
@@ -333,8 +371,8 @@ export default function DriverDashboard() {
                 variant="outline"
                 className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white backdrop-blur-sm"
               >
-                <Settings className="h-4 w-4 mr-2" />
-                Settings
+                <Car className="h-4 w-4 mr-2" />
+                Vehicle Profile
               </Button>
               <Button
                 onClick={() => loadData()}
@@ -429,7 +467,7 @@ export default function DriverDashboard() {
                   value="settings"
                   className="px-6 py-2.5 rounded-lg data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:shadow-md transition-all"
                 >
-                  Settings
+                  Vehicle Profile
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -591,7 +629,7 @@ export default function DriverDashboard() {
               ) : (
                 <div className="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-slate-200">
                   <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <Map className="h-10 w-10 text-slate-300" />
+                    <MapPin className="h-10 w-10 text-slate-300" />
                   </div>
                   <h3 className="text-xl font-bold text-slate-900 mb-2">No trips available</h3>
                   <p className="text-muted-foreground max-w-md mx-auto">
@@ -762,7 +800,7 @@ export default function DriverDashboard() {
               ) : (
                 <div className="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-slate-200">
                   <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <Clock className="h-10 w-10 text-slate-300" />
+                    <Loader2 className="h-10 w-10 text-slate-300" />
                   </div>
                   <h3 className="text-xl font-bold text-slate-900 mb-2">No trip history</h3>
                   <p className="text-muted-foreground max-w-md mx-auto">
@@ -772,7 +810,7 @@ export default function DriverDashboard() {
               )}
             </TabsContent>
 
-            {/* SETTINGS TAB */}
+            {/* VEHICLE PROFILE TAB */}
             <TabsContent value="settings">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 <Card className="md:col-span-2 p-6">
@@ -781,12 +819,68 @@ export default function DriverDashboard() {
                       <Car className="h-6 w-6 text-primary" />
                     </div>
                     <div>
-                      <h2 className="text-xl font-bold text-slate-900">Vehicle Details</h2>
-                      <p className="text-sm text-muted-foreground">Manage your vehicle information</p>
+                      <h2 className="text-xl font-bold text-slate-900">Vehicle Profile</h2>
+                      <p className="text-sm text-muted-foreground">Manage your vehicle information and photos</p>
                     </div>
                   </div>
 
                   <div className="space-y-6">
+                    {/* Vehicle Photo Upload */}
+                    <div className="space-y-2">
+                      <Label>Vehicle Photos</Label>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
+                        {/* Existing Photos */}
+                        {vehiclePhotos.map((url, index) => (
+                          <div key={`existing-${index}`} className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 group">
+                            <img src={url} alt={`Vehicle ${index + 1}`} className="w-full h-full object-cover" />
+                            <button
+                              onClick={() => removeExistingPhoto(index)}
+                              className="absolute top-2 right-2 p-1 bg-black/50 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                            {index === 0 && (
+                              <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs py-1 text-center">
+                                Main Photo
+                              </div>
+                            )}
+                          </div>
+                        ))}
+
+                        {/* New Photos Preview */}
+                        {newPhotos.map((photo, index) => (
+                          <div key={`new-${index}`} className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 group">
+                            <img src={photo.preview} alt="New Upload" className="w-full h-full object-cover opacity-80" />
+                            <button
+                              onClick={() => removeNewPhoto(index)}
+                              className="absolute top-2 right-2 p-1 bg-black/50 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                              <Badge className="bg-blue-500">New</Badge>
+                            </div>
+                          </div>
+                        ))}
+
+                        {/* Upload Button */}
+                        <div className="relative aspect-square rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center hover:bg-slate-100 transition-colors cursor-pointer group">
+                          <Upload className="h-8 w-8 text-slate-300 group-hover:text-primary transition-colors" />
+                          <p className="text-xs text-muted-foreground mt-2 font-medium">Add Photo</p>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            className="absolute inset-0 opacity-0 cursor-pointer"
+                            onChange={handlePhotoSelect}
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Upload multiple photos to show different angles or interior. The first photo will be your main vehicle image.
+                      </p>
+                    </div>
+
                     <div className="grid md:grid-cols-2 gap-6">
                       <div className="space-y-2">
                         <Label htmlFor="vehicle-type">Vehicle Type</Label>
@@ -798,7 +892,7 @@ export default function DriverDashboard() {
                             <SelectItem value="Car">Car</SelectItem>
                             <SelectItem value="Van">Van</SelectItem>
                             <SelectItem value="Bus">Bus</SelectItem>
-                            <SelectItem value="Cab">Cab</SelectItem>
+                            <SelectItem value="Tuk">Tuk Tuk</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -807,9 +901,9 @@ export default function DriverDashboard() {
                         <Label htmlFor="vehicle-model">Vehicle Model</Label>
                         <Input
                           id="vehicle-model"
+                          placeholder="e.g. Toyota Prius"
                           value={vehicleModel}
                           onChange={(e) => setVehicleModel(e.target.value)}
-                          placeholder="e.g. Toyota Prius"
                           className="h-11"
                         />
                       </div>
@@ -818,9 +912,9 @@ export default function DriverDashboard() {
                         <Label htmlFor="license-plate">License Plate</Label>
                         <Input
                           id="license-plate"
+                          placeholder="e.g. ABC-1234"
                           value={licensePlate}
                           onChange={(e) => setLicensePlate(e.target.value)}
-                          placeholder="e.g. ABC-1234"
                           className="h-11"
                         />
                       </div>
@@ -829,19 +923,30 @@ export default function DriverDashboard() {
                         <Label htmlFor="vehicle-color">Vehicle Color</Label>
                         <Input
                           id="vehicle-color"
+                          placeholder="e.g. White"
                           value={vehicleColor}
                           onChange={(e) => setVehicleColor(e.target.value)}
-                          placeholder="e.g. White"
                           className="h-11"
                         />
                       </div>
                     </div>
 
+                    <div className="space-y-2">
+                      <Label htmlFor="vehicle-description">Description</Label>
+                      <Textarea
+                        id="vehicle-description"
+                        placeholder="Tell travelers about your vehicle (e.g. spacious, air-conditioned, comfortable seats...)"
+                        value={vehicleDescription}
+                        onChange={(e) => setVehicleDescription(e.target.value)}
+                        className="min-h-[100px]"
+                      />
+                    </div>
+
                     <div className="pt-4 flex justify-end">
                       <Button
                         onClick={handleSaveSettings}
-                        disabled={isSavingSettings || isSettingsLoading}
-                        className="w-full sm:w-auto min-w-[150px]"
+                        disabled={isSavingSettings}
+                        className="bg-primary hover:bg-primary/90 min-w-[120px]"
                       >
                         {isSavingSettings ? (
                           <>
@@ -856,23 +961,25 @@ export default function DriverDashboard() {
                   </div>
                 </Card>
 
-                {/* Vehicle Preview Card */}
-                <Card className="p-8 flex flex-col items-center justify-center text-center bg-gradient-to-b from-slate-50 to-white border-dashed">
-                  <div className="w-32 h-32 bg-white rounded-full flex items-center justify-center shadow-lg mb-6 relative">
-                    <div className="absolute inset-0 bg-primary/5 rounded-full animate-pulse"></div>
-                    {(() => {
-                      const Icon = getVehicleIcon(vehicleType);
-                      return <Icon className="h-14 w-14 text-primary relative z-10" />;
-                    })()}
-                  </div>
-                  <h3 className="font-bold text-xl text-slate-900">{vehicleType || "Select Type"}</h3>
-                  <p className="text-muted-foreground mt-1 font-medium">
-                    {vehicleModel || "Vehicle Model"}
-                  </p>
-                  <Badge variant="outline" className="mt-4 px-4 py-1 text-sm border-slate-300 bg-white">
-                    {licensePlate || "NO PLATE"}
-                  </Badge>
-                </Card>
+                <div className="space-y-6">
+                  <Card className="p-6 bg-slate-900 text-white border-none">
+                    <h3 className="font-bold text-lg mb-2">Pro Tips</h3>
+                    <ul className="space-y-3 text-sm text-slate-300">
+                      <li className="flex gap-2">
+                        <Check className="h-4 w-4 text-green-400 flex-shrink-0 mt-0.5" />
+                        <span>Upload a clear photo of your vehicle to get more bookings.</span>
+                      </li>
+                      <li className="flex gap-2">
+                        <Check className="h-4 w-4 text-green-400 flex-shrink-0 mt-0.5" />
+                        <span>Mention amenities like AC, comfortable seats, or luggage space in the description.</span>
+                      </li>
+                      <li className="flex gap-2">
+                        <Check className="h-4 w-4 text-green-400 flex-shrink-0 mt-0.5" />
+                        <span>Keep your vehicle clean and well-maintained for better ratings.</span>
+                      </li>
+                    </ul>
+                  </Card>
+                </div>
               </div>
             </TabsContent>
           </Tabs>

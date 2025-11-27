@@ -5,26 +5,9 @@ export interface Profile {
   phone: string | null;
   avatar_url: string | null;
   user_type: "traveler" | "driver";
+  age: number | null;
   created_at: string;
   updated_at: string;
-}
-
-export interface DriverProfile extends Profile {
-  driver: {
-    id: string;
-    license_number: string | null;
-    vehicle_type: string | null;
-    vehicle_model: string | null;
-    vehicle_color: string | null;
-    license_plate: string | null;
-    insurance_expires_at: string | null;
-    total_trips: number;
-    average_rating: number;
-    is_verified: boolean;
-    bio: string | null;
-    created_at: string;
-    updated_at: string;
-  };
 }
 
 export interface Trip {
@@ -62,7 +45,17 @@ export interface DriverBid {
   notes: string | null;
   created_at: string;
   updated_at: string;
-  driver?: Profile;
+  driver?: Profile & {
+    driver_stats?: {
+      average_rating: number;
+      total_trips: number;
+    }[];
+    driver_profiles?: {
+      vehicle_photo_url: string | null;
+      vehicle_description: string | null;
+      vehicle_photos: string[] | null;
+    }[];
+  };
   trip?: Trip;
 }
 
@@ -147,6 +140,9 @@ export interface DriverDetails {
   vehicle_type: string | null;
   vehicle_model: string | null;
   vehicle_color: string | null;
+  vehicle_photo_url: string | null;
+  vehicle_description: string | null;
+  vehicle_photos?: string[] | null;
   license_plate: string | null;
   insurance_expires_at: string | null;
   total_trips: number;

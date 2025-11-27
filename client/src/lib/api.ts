@@ -71,7 +71,7 @@ export async function getMyTrips(): Promise<Trip[]> {
     .from("trips")
     .select(`
       *,
-      traveler:profiles!trips_traveler_id_fkey(id, full_name, email, phone, avatar_url, phone_number)
+      traveler:profiles!trips_traveler_id_fkey(id, full_name, email, phone, avatar_url)
     `)
     .eq("traveler_id", sessionData.session.user.id)
     .order("created_at", { ascending: false });
@@ -85,7 +85,11 @@ export async function getMyTrips(): Promise<Trip[]> {
 
 export async function createTrip(payload: {
   origin: string;
+  origin_lat?: number;
+  origin_lng?: number;
   destination: string;
+  destination_lat?: number;
+  destination_lng?: number;
   departure_date: string;
   return_date?: string;
   seats_needed: number;
@@ -325,7 +329,10 @@ export async function getBidsForTrip(tripId: string): Promise<DriverBid[]> {
     .from("driver_bids")
     .select(`
       *,
-      driver:profiles!driver_id(id, full_name, email, phone, avatar_url)
+      driver:profiles!driver_id(
+        id, full_name, email, phone, avatar_url,
+        driver_stats:driver_profiles(average_rating, total_trips)
+      )
     `)
     .eq("trip_id", tripId)
     .order("created_at", { ascending: false });
@@ -338,7 +345,6 @@ export async function getBidsForTrip(tripId: string): Promise<DriverBid[]> {
 }
 
 export async function notifyDriversOfTrip(tripId: string): Promise<void> {
-  // This is the only one we keep as Edge Function, but we wrap it in try-catch in callers
   await callEdgeFunction<void>("notify-drivers", {
     method: "POST",
     body: { trip_id: tripId },
@@ -367,6 +373,9 @@ export async function updateDriverDetails(payload: {
   vehicle_model?: string;
   license_plate?: string;
   vehicle_color?: string;
+  vehicle_description?: string;
+  vehicle_photos?: string[];
+  vehicle_photo_url?: string;
 }): Promise<void> {
   const { data: sessionData } = await supabase.auth.getSession();
   if (!sessionData.session) throw new Error("Not authenticated");
@@ -379,6 +388,30 @@ export async function updateDriverDetails(payload: {
   if (error) {
     throw new Error(error.message);
   }
+}
+
+export async function uploadVehiclePhoto(file: File): Promise<string> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) throw new Error("Not authenticated");
+
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${sessionData.session.user.id}/${Math.random()}.${fileExt}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('vehicle-photos')
+    .upload(fileName, file, {
+      upsert: true
+    });
+
+  if (uploadError) {
+    throw new Error(uploadError.message);
+  }
+
+  const { data } = supabase.storage
+    .from('vehicle-photos')
+    .getPublicUrl(fileName);
+
+  return data.publicUrl;
 }
 
 export async function deleteTrip(tripId: string): Promise<void> {
